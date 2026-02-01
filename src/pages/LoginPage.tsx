@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // [추가] 훅 가져오기
+import { useNavigate } from 'react-router-dom';
 import { User, Lock, ChevronRight } from 'lucide-react';
 
 export default function LoginPage() {
-  const navigate = useNavigate(); // [추가] 이동 함수 생성
+  const navigate = useNavigate();
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
 
@@ -11,12 +11,11 @@ export default function LoginPage() {
     e.preventDefault();
     console.log('Login attempt:', { id, password });
     
-    // [추가] 로그인 성공 시 홈으로 이동!
-    navigate('/'); 
+    // [중요] 로그인 성공 시 홈 화면('/home')으로 이동
+    navigate('/home');
   };
 
   return (
-    // 전체 배경 (AppLayout과 동일한 그라디언트)
     <div className="h-screen w-screen flex justify-center bg-gradient-to-b from-gray-50 to-gray-100 overflow-hidden">
       
       {/* 모바일 컨테이너 */}
@@ -25,7 +24,6 @@ export default function LoginPage() {
         {/* 상단 여백 및 로고 영역 */}
         <div className="flex-1 flex flex-col justify-center items-center -mt-20">
           <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mb-6 text-primary-600">
-            {/* 로고 아이콘 자리 (임시로 텍스트나 아이콘 사용) */}
             <svg
               className="w-10 h-10"
               fill="none"
