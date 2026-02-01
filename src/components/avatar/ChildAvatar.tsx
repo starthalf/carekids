@@ -13,8 +13,7 @@ const sizeClasses = {
 
 export default function ChildAvatar({ child, size = 'md' }: ChildAvatarProps) {
   return (
-    // [수정] flex-row -> flex-col, items-center, text-center 추가
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex items-center gap-3">
       <div
         className={`${sizeClasses[size]} rounded-full overflow-hidden ring-2 ring-primary-100 ring-offset-2 flex-shrink-0`}
       >
@@ -24,7 +23,7 @@ export default function ChildAvatar({ child, size = 'md' }: ChildAvatarProps) {
           className="w-full h-full object-cover"
         />
       </div>
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col">
         <span className="font-semibold text-gray-800">{child.name}</span>
         <span className="text-sm text-gray-500">{child.grade}</span>
       </div>
