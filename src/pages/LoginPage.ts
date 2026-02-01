@@ -1,14 +1,18 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // [추가] 훅 가져오기
 import { User, Lock, ChevronRight } from 'lucide-react';
 
 export default function LoginPage() {
+  const navigate = useNavigate(); // [추가] 이동 함수 생성
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Login attempt:', { id, password });
-    // 여기에 로그인 로직 추가
+    
+    // [추가] 로그인 성공 시 홈으로 이동!
+    navigate('/'); 
   };
 
   return (
