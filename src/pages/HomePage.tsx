@@ -61,12 +61,17 @@ export default function HomePage() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 animate-scaleIn">
         <div className="p-5 flex flex-col gap-4">
-          <div className="flex items-start justify-between">
-            <ChildAvatar child={currentChild} size="md" />
-            <div className="flex-shrink-0">
-              <TrendCard trends={currentReport.trends} />
-            </div>
-          </div>
+          <div className="flex items-start justify-between gap-4"> {/* gap 추가로 안전거리 확보 */}
+  {/* 아바타는 크기 유지 */}
+  <div className="flex-shrink-0">
+    <ChildAvatar child={currentChild} size="md" />
+  </div>
+
+  {/* TrendCard 영역은 유연하게 줄어들 수 있게 flex-1 또는 min-w-0 적용 */}
+  <div className="flex-1 min-w-0">
+    <TrendCard trends={currentReport.trends} />
+  </div>
+</div>
 
           <div className="border-t border-gray-100" />
 
