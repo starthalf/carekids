@@ -20,12 +20,15 @@ export default function HomePage() {
   } = useChildData();
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4 p-4 pb-24"> 
+      {/* pb-24 추가: 하단 탭바에 가려지지 않도록 여유 공간 확보 */}
+
       <header className="text-center py-3">
         <h1 className="text-xl font-bold text-primary-600">도비종합학원</h1>
         <p className="text-sm text-gray-500 mt-1">학습 리포트</p>
       </header>
 
+      {/* 날짜 네비게이션 */}
       <div className="flex items-center justify-between bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
         <button
           onClick={goToPreviousWeek}
@@ -61,17 +64,20 @@ export default function HomePage() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 animate-scaleIn">
         <div className="p-5 flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4"> {/* gap 추가로 안전거리 확보 */}
-  {/* 아바타는 크기 유지 */}
-  <div className="flex-shrink-0">
-    <ChildAvatar child={currentChild} size="md" />
-  </div>
+          {/* [수정] 상단 프로필 및 트렌드 영역 */}
+          {/* items-start -> items-center로 변경하여 수직 중앙 정렬 */}
+          <div className="flex items-center gap-6"> 
+            
+            {/* 아바타 영역: flex-shrink-0 유지 (찌그러짐 방지) */}
+            <div className="flex-shrink-0">
+              <ChildAvatar child={currentChild} size="md" />
+            </div>
 
-  {/* TrendCard 영역은 유연하게 줄어들 수 있게 flex-1 또는 min-w-0 적용 */}
-  <div className="flex-1 min-w-0">
-    <TrendCard trends={currentReport.trends} />
-  </div>
-</div>
+            {/* 트렌드 카드 영역: 남은 공간 모두 사용 (flex-1, min-w-0) */}
+            <div className="flex-1 min-w-0">
+              <TrendCard trends={currentReport.trends} />
+            </div>
+          </div>
 
           <div className="border-t border-gray-100" />
 
