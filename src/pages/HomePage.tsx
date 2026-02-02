@@ -1,96 +1,90 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
 import { useChildData } from '../contexts/ChildDataContext';
-import { formatDateRange, getRelativeWeekLabel } from '../utils/dateUtils';
-import ChildAvatar from '../components/avatar/ChildAvatar';
-import TrendCard from '../components/trend/TrendCard';
-import PentagonChart from '../components/stats/PentagonChart';
-import HashtagList from '../components/insight/HashtagList';
-import SeasonInsightCard from '../components/insight/SeasonInsightCard';
-import ParentActionCard from '../components/insight/ParentActionCard';
+import { AppLayout } from '../components/layout/AppLayout';
+import { ChildAvatar } from '../components/avatar/ChildAvatar';
+import { TrendCard } from '../components/trend/TrendCard';
+import { PentagonChart } from '../components/stats/PentagonChart';
+import { HashtagList } from '../components/insight/HashtagList';
+import { SeasonInsightCard } from '../components/insight/SeasonInsightCard';
+import { ParentActionCard } from '../components/insight/ParentActionCard';
+import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { format, addDays, subDays } from 'date-fns';
+import { ko } from 'date-fns/locale';
 
-export default function HomePage() {
-  const {
-    currentChild,
-    currentReport,
-    currentWeekIndex,
-    goToPreviousWeek,
-    goToNextWeek,
-    canGoNext,
-    canGoPrevious,
-  } = useChildData();
+export const HomePage = () => {
+  const { currentChild } = useChildData();
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const handlePrevDate = () => setCurrentDate(prev => subDays(prev, 1));
+  const handleNextDate = () => setCurrentDate(prev => addDays(prev, 1));
+
+  if (!currentChild) return <div>Loading...</div>;
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24"> 
-      {/* pb-24 추가: 하단 탭바에 가려지지 않도록 여유 공간 확보 */}
+    <AppLayout>
+      <div className="flex flex-col gap-4 pb-24">
+        {/* 헤더 섹션 */}
+        <header className="flex items-center justify-between px-1 py-2">
+          <h1 className="text-xl font-bold text-gray-900">도비종합학원</h1>
+          <div className="flex items-center gap-2">
+            <button className="p-2 text-gray-400 hover:text-gray-600">
+              <span className="sr-only">알림</span>
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+            </button>
+          </div>
+        </header>
 
-      <header className="text-center py-3">
-        <h1 className="text-xl font-bold text-primary-600">도비종합학원</h1>
-        <p className="text-sm text-gray-500 mt-1">학습 리포트</p>
-      </header>
-
-      {/* 날짜 네비게이션 */}
-      <div className="flex items-center justify-between bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
-        <button
-          onClick={goToPreviousWeek}
-          disabled={!canGoPrevious}
-          className={`p-2 rounded-lg transition-colors ${
-            canGoPrevious
-              ? 'hover:bg-gray-100 text-gray-700'
-              : 'text-gray-300 cursor-not-allowed'
-          }`}
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div className="text-center">
-          <p className="text-sm font-medium text-primary-600">
-            {getRelativeWeekLabel(currentWeekIndex)}
-          </p>
-          <p className="text-xs text-gray-500">
-            {formatDateRange(currentReport.startDate, currentReport.endDate)}
-          </p>
+        {/* 날짜 네비게이션 */}
+        <div className="flex items-center justify-between bg-white rounded-full px-4 py-2 shadow-sm border border-gray-100">
+          <button onClick={handlePrevDate} className="p-1 hover:bg-gray-100 rounded-full">
+            <ChevronLeft className="w-5 h-5 text-gray-400" />
+          </button>
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
+            <Calendar className="w-4 h-4" />
+            <span>{format(currentDate, 'yyyy.MM.dd (eee)', { locale: ko })}</span>
+          </div>
+          <button onClick={handleNextDate} className="p-1 hover:bg-gray-100 rounded-full">
+            <ChevronRight className="w-5 h-5 text-gray-400" />
+          </button>
         </div>
-        <button
-          onClick={goToNextWeek}
-          disabled={!canGoNext}
-          className={`p-2 rounded-lg transition-colors ${
-            canGoNext
-              ? 'hover:bg-gray-100 text-gray-700'
-              : 'text-gray-300 cursor-not-allowed'
-          }`}
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 animate-scaleIn">
-        <div className="p-5 flex flex-col gap-4">
-          {/* [수정] 상단 프로필 및 트렌드 영역 */}
-          {/* items-start -> items-center로 변경하여 수직 중앙 정렬 */}
-          <div className="flex items-center gap-6"> 
-            
-            {/* 아바타 영역: flex-shrink-0 유지 (찌그러짐 방지) */}
-            <div className="flex-shrink-0">
-              <ChildAvatar child={currentChild} size="md" />
-            </div>
-
-            {/* 트렌드 카드 영역: 남은 공간 모두 사용 (flex-1, min-w-0) */}
-            <div className="flex-1 min-w-0">
-              <TrendCard trends={currentReport.trends} />
-            </div>
+        {/* 메인 대시보드 카드 */}
+        <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center pb-10">
+          
+          {/* 1. ChildAvatar 섹션 (사진과 정보만) */}
+          <div className="mb-6">
+            <ChildAvatar child={currentChild} size="lg" />
           </div>
 
-          <div className="border-t border-gray-100" />
+          {/* 2. PentagonChart (위로 이동됨) */}
+          <div className="w-full flex justify-center mb-8">
+             <PentagonChart data={currentChild.stats} size="xl" />
+          </div>
 
-          <div className="flex flex-col gap-6">
-            <PentagonChart stats={currentReport.stats} />
-            <HashtagList hashtags={currentReport.insights.hashtags} />
+          {/* 3. TrendCard (아래로 이동됨) */}
+          <div className="w-full mb-8">
+            <TrendCard trend={currentChild.trend} />
+          </div>
+
+          {/* 4. HashtagList */}
+          <div className="w-full">
+            <HashtagList tags={currentChild.tags} />
           </div>
         </div>
+
+        {/* 하단 인사이트 카드들 */}
+        <SeasonInsightCard 
+          season="겨울방학" 
+          insight="지난 학기보다 수학 점수가 15% 올랐어요! 이대로면 다음 학기 상위권 진입이 가능해요." 
+        />
+        
+        <ParentActionCard 
+          action="칭찬 격려하기"
+          description="아이가 최근 과제를 모두 완료했어요. 따뜻한 말 한마디를 건네주세요."
+        />
       </div>
-
-      <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
-
-      <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
-    </div>
+    </AppLayout>
   );
-}
+};
