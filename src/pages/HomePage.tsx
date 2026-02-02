@@ -56,26 +56,37 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* 1. 아바타 섹션 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex justify-center animate-scaleIn">
+      {/* 1. 아바타 섹션: py-4로 세로 길이를 줄이고 왼쪽 정렬 배치 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4 flex items-center animate-scaleIn">
         <ChildAvatar child={currentChild} size="lg" />
       </div>
 
-      {/* 2. 분석 섹션 (오각형 차트 + 해시태그) */}
+      {/* 2. 분석 섹션 (오각형 차트 + 한 줄 해시태그) */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">
         <PentagonChart stats={currentReport.stats} />
         <div className="border-t border-gray-100" />
-        {/* 해시태그 영역: 컴포넌트 내부에서 한 줄 처리가 되도록 구성됨 */}
-        <HashtagList hashtags={currentReport.insights.hashtags} />
+        {/* [수정] 해시태그를 한 줄로 강제하고 폰트 크기를 줄임 */}
+        <div className="overflow-x-auto scrollbar-hide">
+          <div className="flex flex-nowrap gap-1.5 py-1">
+            {currentReport.insights.hashtags.map((tag) => (
+              <span 
+                key={tag} 
+                className="whitespace-nowrap px-2 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-medium rounded-full border border-gray-100"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* 3. 인사이트 카드들 */}
       <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
       <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
 
-      {/* 4. [수정] Weekly Trend를 최하단으로 이동 */}
+      {/* 4. Weekly Trend: 최하단 유지 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
-        <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">Weekly Trend</h3>
+        <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-tighter">Weekly Trend</h3>
         <TrendCard trends={currentReport.trends} />
       </div>
     </div>
