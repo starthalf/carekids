@@ -21,6 +21,8 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-24"> 
+      {/* pb-24 추가: 하단 탭바에 가려지지 않도록 여유 공간 확보 */}
+
       <header className="text-center py-3">
         <h1 className="text-xl font-bold text-primary-600">도비종합학원</h1>
         <p className="text-sm text-gray-500 mt-1">학습 리포트</p>
@@ -32,7 +34,9 @@ export default function HomePage() {
           onClick={goToPreviousWeek}
           disabled={!canGoPrevious}
           className={`p-2 rounded-lg transition-colors ${
-            canGoPrevious ? 'hover:bg-gray-100 text-gray-700' : 'text-gray-300 cursor-not-allowed'
+            canGoPrevious
+              ? 'hover:bg-gray-100 text-gray-700'
+              : 'text-gray-300 cursor-not-allowed'
           }`}
         >
           <ChevronLeft className="w-5 h-5" />
@@ -49,7 +53,9 @@ export default function HomePage() {
           onClick={goToNextWeek}
           disabled={!canGoNext}
           className={`p-2 rounded-lg transition-colors ${
-            canGoNext ? 'hover:bg-gray-100 text-gray-700' : 'text-gray-300 cursor-not-allowed'
+            canGoNext
+              ? 'hover:bg-gray-100 text-gray-700'
+              : 'text-gray-300 cursor-not-allowed'
           }`}
         >
           <ChevronRight className="w-5 h-5" />
@@ -57,28 +63,33 @@ export default function HomePage() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 animate-scaleIn">
-        <div className="p-5 flex flex-col gap-6">
-          
-          {/* [수정] 아바타를 중앙에 단독 배치 */}
-          <div className="flex justify-center py-2">
-            <ChildAvatar child={currentChild} size="lg" />
+        <div className="p-5 flex flex-col gap-4">
+          {/* [수정] 상단 프로필 및 트렌드 영역 */}
+          {/* items-start -> items-center로 변경하여 수직 중앙 정렬 */}
+          <div className="flex items-center gap-6"> 
+            
+            {/* 아바타 영역: flex-shrink-0 유지 (찌그러짐 방지) */}
+            <div className="flex-shrink-0">
+              <ChildAvatar child={currentChild} size="md" />
+            </div>
+
+            {/* 트렌드 카드 영역: 남은 공간 모두 사용 (flex-1, min-w-0) */}
+            <div className="flex-1 min-w-0">
+              <TrendCard trends={currentReport.trends} />
+            </div>
           </div>
 
           <div className="border-t border-gray-100" />
 
-          <div className="flex flex-col gap-8">
-            {/* 오각형 차트 */}
+          <div className="flex flex-col gap-6">
             <PentagonChart stats={currentReport.stats} />
-            
-            {/* [수정] TrendCard를 차트 아래로 이동 */}
-            <TrendCard trends={currentReport.trends} />
-
             <HashtagList hashtags={currentReport.insights.hashtags} />
           </div>
         </div>
       </div>
 
       <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
+
       <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
     </div>
   );
