@@ -1,15 +1,11 @@
-interface HashtagListProps {
-  hashtags: string[];
-}
-
-export default function HashtagList({ hashtags }: HashtagListProps) {
+// HashtagList.tsx 내부 예시
+export default function HashtagList({ hashtags }: { hashtags: string[] }) {
   return (
-    <div className="flex flex-wrap gap-2 justify-center">
-      {hashtags.map((tag, index) => (
-        <span
-          key={tag}
-          className="inline-block px-3 py-1.5 bg-primary-50 text-primary-700 text-sm font-medium rounded-full animate-fadeIn"
-          style={{ animationDelay: `${index * 100}ms` }}
+    <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
+      {hashtags.map((tag) => (
+        <span 
+          key={tag} 
+          className="whitespace-nowrap px-2 py-1 bg-gray-50 text-gray-600 text-[10px] sm:text-xs rounded-full border border-gray-100"
         >
           #{tag}
         </span>
