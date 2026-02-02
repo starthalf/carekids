@@ -13,8 +13,8 @@ const sizeClasses = {
 
 export default function ChildAvatar({ child, size = 'md' }: ChildAvatarProps) {
   return (
-    // [수정] flex-row -> flex-col, items-center, text-center 추가
-    <div className="flex flex-col items-center gap-2">
+    // [수정] flex-row로 변경하여 사진 우측에 정보 배치, gap 확장
+    <div className="flex flex-row items-center gap-4">
       <div
         className={`${sizeClasses[size]} rounded-full overflow-hidden ring-2 ring-primary-100 ring-offset-2 flex-shrink-0`}
       >
@@ -24,8 +24,9 @@ export default function ChildAvatar({ child, size = 'md' }: ChildAvatarProps) {
           className="w-full h-full object-cover"
         />
       </div>
-      <div className="flex flex-col items-center">
-        <span className="font-semibold text-gray-800">{child.name}</span>
+      {/* [수정] 텍스트를 왼쪽 정렬하고 세로로 쌓음 */}
+      <div className="flex flex-col">
+        <span className="font-bold text-lg text-gray-800 leading-tight">{child.name}</span>
         <span className="text-sm text-gray-500">{child.grade}</span>
       </div>
     </div>
