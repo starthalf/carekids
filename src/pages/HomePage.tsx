@@ -8,15 +8,34 @@ import { HashtagList } from '../components/insight/HashtagList';
 import { SeasonInsightCard } from '../components/insight/SeasonInsightCard';
 import { ParentActionCard } from '../components/insight/ParentActionCard';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
-import { format, addDays, subDays } from 'date-fns';
-import { ko } from 'date-fns/locale';
 
 export const HomePage = () => {
   const { currentChild } = useChildData();
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const handlePrevDate = () => setCurrentDate(prev => subDays(prev, 1));
-  const handleNextDate = () => setCurrentDate(prev => addDays(prev, 1));
+  // 날짜 하루 전으로 이동
+  const handlePrevDate = () => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() - 1);
+    setCurrentDate(newDate);
+  };
+
+  // 날짜 하루 후로 이동
+  const handleNextDate = () => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() + 1);
+    setCurrentDate(newDate);
+  };
+
+  // 날짜 포맷 함수 (YYYY.MM.DD (요일))
+  const formatDate = (date: Date) => {
+    const days = ['일', '월', '화', '수', '목', '금', '토'];
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const day = days[date.getDay()];
+    return `${yyyy}.${mm}.${dd} (${day})`;
+  };
 
   if (!currentChild) return <div>Loading...</div>;
 
@@ -43,7 +62,7 @@ export const HomePage = () => {
           </button>
           <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
             <Calendar className="w-4 h-4" />
-            <span>{format(currentDate, 'yyyy.MM.dd (eee)', { locale: ko })}</span>
+            <span>{formatDate(currentDate)}</span>
           </div>
           <button onClick={handleNextDate} className="p-1 hover:bg-gray-100 rounded-full">
             <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -53,17 +72,17 @@ export const HomePage = () => {
         {/* 메인 대시보드 카드 */}
         <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center pb-10">
           
-          {/* 1. ChildAvatar 섹션 (사진과 정보만) */}
+          {/* 1. ChildAvatar 섹션 (요청하신 대로 사진과 정보만 남김) */}
           <div className="mb-6">
             <ChildAvatar child={currentChild} size="lg" />
           </div>
 
-          {/* 2. PentagonChart (위로 이동됨) */}
+          {/* 2. PentagonChart (TrendCard 위로 배치) */}
           <div className="w-full flex justify-center mb-8">
              <PentagonChart data={currentChild.stats} size="xl" />
           </div>
 
-          {/* 3. TrendCard (아래로 이동됨) */}
+          {/* 3. TrendCard (PentagonChart 아래로 이동) */}
           <div className="w-full mb-8">
             <TrendCard trend={currentChild.trend} />
           </div>
