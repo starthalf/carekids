@@ -1,44 +1,33 @@
-import React from 'react';
-import { Child } from '../../data/types';
+import type { Child } from '../../data/types';
 
 interface ChildAvatarProps {
   child: Child;
   size?: 'sm' | 'md' | 'lg';
 }
 
-export const ChildAvatar: React.FC<ChildAvatarProps> = ({ child, size = 'md' }) => {
-  const sizeClasses = {
-    sm: 'w-10 h-10 text-xs',
-    md: 'w-14 h-14 text-sm',
-    lg: 'w-20 h-20 text-base',
-  };
+const sizeClasses = {
+  sm: 'w-10 h-10',
+  md: 'w-14 h-14',
+  lg: 'w-20 h-20',
+};
 
-  const imageSizeClasses = {
-    sm: 'w-10 h-10',
-    md: 'w-14 h-14',
-    lg: 'w-20 h-20',
-  };
-
+export default function ChildAvatar({ child, size = 'md' }: ChildAvatarProps) {
   return (
-    <div className="flex flex-col items-center justify-center">
-      {/* 아이 사진 */}
-      <div className={`relative ${imageSizeClasses[size]} rounded-full overflow-hidden border-2 border-white shadow-sm mb-2`}>
+    // [수정] flex-row -> flex-col, items-center, text-center 추가
+    <div className="flex flex-col items-center gap-2">
+      <div
+        className={`${sizeClasses[size]} rounded-full overflow-hidden ring-2 ring-primary-100 ring-offset-2 flex-shrink-0`}
+      >
         <img
-          src={child.imageUrl}
+          src={child.avatar}
           alt={child.name}
           className="w-full h-full object-cover"
         />
       </div>
-      
-      {/* 아이 정보 (이름 & 학년) */}
-      <div className="text-center">
-        <h3 className="font-bold text-gray-900 leading-tight">{child.name}</h3>
-        <p className="text-xs text-gray-500 mt-0.5">
-          {child.grade} {child.class && `• ${child.class}`}
-        </p>
+      <div className="flex flex-col items-center">
+        <span className="font-semibold text-gray-800">{child.name}</span>
+        <span className="text-sm text-gray-500">{child.grade}</span>
       </div>
     </div>
   );
-};
-
-export default ChildAvatar;
+}
