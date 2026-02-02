@@ -56,27 +56,28 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* 1. 아바타 섹션: 아이 사진과 정보만 표시 */}
+      {/* 1. 아바타 섹션 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex justify-center animate-scaleIn">
         <ChildAvatar child={currentChild} size="lg" />
       </div>
 
-      {/* 2. 분석 섹션: 오각형 차트와 해시태그 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-8 animate-scaleIn">
+      {/* 2. 분석 섹션 (오각형 차트 + 해시태그) */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">
         <PentagonChart stats={currentReport.stats} />
         <div className="border-t border-gray-100" />
+        {/* 해시태그 영역: 컴포넌트 내부에서 한 줄 처리가 되도록 구성됨 */}
         <HashtagList hashtags={currentReport.insights.hashtags} />
       </div>
 
-      {/* 3. 트렌드 섹션: 차트/해시태그와 분리하여 아래로 배치 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
-        <h3 className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider">Weekly Trend</h3>
-        <TrendCard trends={currentReport.trends} />
-      </div>
-
-      {/* 기타 인사이트 카드들 */}
+      {/* 3. 인사이트 카드들 */}
       <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
       <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
+
+      {/* 4. [수정] Weekly Trend를 최하단으로 이동 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
+        <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">Weekly Trend</h3>
+        <TrendCard trends={currentReport.trends} />
+      </div>
     </div>
   );
 }
