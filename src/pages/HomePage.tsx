@@ -14,7 +14,6 @@ export default function HomePage() {
     currentChild,
     currentReport,
     currentWeekIndex,
-    isLoadingReport,
     goToPreviousWeek,
     goToNextWeek,
     canGoNext,
@@ -26,6 +25,7 @@ export default function HomePage() {
   const [showSelector, setShowSelector] = useState(false);
   const hasMultiple = myAcademies.length > 1;
 
+  // 연결된 학원이 없으면
   if (myAcademies.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
@@ -41,6 +41,7 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-24">
+      {/* 헤더: 학원/자녀 선택 가능 */}
       <header className="text-center py-3 relative">
         <button
           onClick={() => hasMultiple && setShowSelector(!showSelector)}
@@ -51,6 +52,7 @@ export default function HomePage() {
         </button>
         <p className="text-sm text-gray-500 mt-1">학습 리포트</p>
 
+        {/* 학원 선택 드롭다운 */}
         {showSelector && hasMultiple && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setShowSelector(false)} />
@@ -88,6 +90,7 @@ export default function HomePage() {
         )}
       </header>
 
+      {/* 날짜 네비게이션 */}
       <div className="flex items-center justify-between bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
         <button
           onClick={goToPreviousWeek}
@@ -103,7 +106,7 @@ export default function HomePage() {
             {getRelativeWeekLabel(currentWeekIndex)}
           </p>
           <p className="text-xs text-gray-500">
-            {currentReport ? formatDateRange(currentReport.startDate, currentReport.endDate) : '...'}
+            {formatDateRange(currentReport.startDate, currentReport.endDate)}
           </p>
         </div>
         <button
@@ -117,51 +120,47 @@ export default function HomePage() {
         </button>
       </div>
 
+      {/* 아바타 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4 flex items-center animate-scaleIn">
         <ChildAvatar child={currentChild} size="lg" />
       </div>
 
-      {isLoadingReport && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-sm text-gray-400">
-          데이터 분석 중...
-        </div>
-      )}
-
-      {!isLoadingReport && currentReport && (
-        <>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">
-            <PentagonChart stats={currentReport.stats} />
-            <div className="border-t border-gray-100" />
-            {currentReport.insights.hashtags.length > 0 && (
-              <div className="overflow-x-auto scrollbar-hide">
-                <div className="flex flex-nowrap gap-1.5 py-1">
-                  {currentReport.insights.hashtags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="whitespace-nowrap px-2 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-medium rounded-full border border-gray-100"
-                    >
-                      {tag.startsWith('#') ? tag : `#${tag}`}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+      {/* 5각형 차트 + 해시태그 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">
+        <PentagonChart stats={currentReport.stats} />
+        <div className="border-t border-gray-100" />
+        <div className="overflow-x-auto scrollbar-hide">
+          <div className="flex flex-nowrap gap-1.5 py-1">
+            {currentReport.insights.hashtags.map((tag) => (
+              <span
+                key={tag}
+                className="whitespace-nowrap px-2 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-medium rounded-full border border-gray-100"
+              >
+                #{tag}
+              </span>
+            ))}
           </div>
+        </div>
+      </div>
 
-          <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
+      {/* 인사이트 카드들 */}
+      <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
+      <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
 
-          {currentReport.insights.parentActions.length > 0 && (
-            <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
-          )}
+      {/* Weekly Trend */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
+        <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-tighter">Weekly Trend</h3>
+        <TrendCard trends={currentReport.trends} />
+      </div>
 
-          {currentReport.trends.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
-              <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-tighter">Weekly Trend</h3>
-              <TrendCard trends={currentReport.trends} />
-            </div>
-          )}
-        </>
-      )}
+      {/* Step 1 안내 (Mock 데이터 알림 - Step 2~3에서 제거) */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+        <p className="font-semibold mb-1">📝 알림</p>
+        <p>
+          현재 보이는 통계/해시태그/조언은 데모용 데이터입니다.
+          충분한 데이터가 쌓이면 자녀의 실제 분석으로 자동 전환됩니다.
+        </p>
+      </div>
     </div>
   );
 }
