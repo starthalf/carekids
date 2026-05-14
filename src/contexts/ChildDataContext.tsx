@@ -78,10 +78,17 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
         const { start, end } = getWeekRange(weekOffset);
         const prevWeek = getWeekRange(weekOffset - 1);
 
-        const [thisInputs, prevInputs] = await Promise.all([
-          fetchWeekInputs(currentAcademy.studentId, start, end),
-          fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
-        ]);
+      const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('fetch timeout 10s')), 10000)
+        );
+
+        const [thisInputs, prevInputs] = await Promise.race([
+          Promise.all([
+            fetchWeekInputs(currentAcademy.studentId, start, end),
+            fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
+          ]),
+          timeout,
+        ]) as Awaited<ReturnType<typeof fetchWeekInputs>>[];
 
         if (cancelled) return;
 
