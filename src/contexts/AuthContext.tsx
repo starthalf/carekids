@@ -87,53 +87,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const loadParentAndAcademies = async (authUserId: string) => {
-    const { data: parentRow } = await supabase
-      .from('parents')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .maybeSingle();
+ const loadParentAndAcademies = async (authUserId: string) => {
+    console.log('[LOAD] parent query start');
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('parent query timeout 10s')), 10000)
+    );
 
-    if (!parentRow) {
+    try {
+      const parentPromise = supabase
+        .from('parents')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
+
+      const parentResult: any = await Promise.race([parentPromise, timeout]);
+      const { data: parentRow } = parentResult;
+      console.log('[LOAD] parent done', parentRow);
+
+      if (!parentRow) {
+        setParent(null);
+        setMyAcademies([]);
+        return;
+      }
+      const p = mapParent(parentRow);
+      setParent(p);
+
+      console.log('[LOAD] parent_students query start');
+      const psPromise = supabase
+        .from('parent_students')
+        .select(`
+          id, academy_id, student_id, relationship, status,
+          students(name, grade, avatar),
+          academies(name)
+        `)
+        .eq('parent_id', p.id)
+        .eq('status', 'active');
+
+      const psResult: any = await Promise.race([psPromise, timeout]);
+      const { data: psRows } = psResult;
+      console.log('[LOAD] parent_students done, count:', psRows?.length);
+
+      const academies: ParentAcademy[] = (psRows || []).map((r: any) => ({
+        parentStudentId: r.id,
+        academyId: r.academy_id,
+        academyName: r.academies?.name || '학원',
+        studentId: r.student_id,
+        studentName: r.students?.name || '자녀',
+        studentGrade: r.students?.grade || 0,
+        studentAvatar: r.students?.avatar || '',
+        relationship: r.relationship,
+      }));
+
+      setMyAcademies(academies);
+
+      const saved = localStorage.getItem(SELECTED_ACADEMY_KEY);
+      const validSaved = academies.find(a => a.academyId === saved);
+      if (validSaved) {
+        setSelectedAcademyId(saved);
+      } else if (academies.length > 0) {
+        setSelectedAcademyId(academies[0].academyId);
+        localStorage.setItem(SELECTED_ACADEMY_KEY, academies[0].academyId);
+      } else {
+        setSelectedAcademyId(null);
+      }
+    } catch (err) {
+      console.error('[LOAD] error:', err);
+      // timeout이면 기존 상태 유지 (로그아웃 막기)
+      if (err instanceof Error && err.message.includes('timeout')) {
+        console.warn('[LOAD] timeout - keeping existing state');
+        return;
+      }
       setParent(null);
       setMyAcademies([]);
-      return;
-    }
-    const p = mapParent(parentRow);
-    setParent(p);
-
-    const { data: psRows } = await supabase
-      .from('parent_students')
-      .select(`
-        id, academy_id, student_id, relationship, status,
-        students(name, grade, avatar),
-        academies(name)
-      `)
-      .eq('parent_id', p.id)
-      .eq('status', 'active');
-
-    const academies: ParentAcademy[] = (psRows || []).map((r: any) => ({
-      parentStudentId: r.id,
-      academyId: r.academy_id,
-      academyName: r.academies?.name || '학원',
-      studentId: r.student_id,
-      studentName: r.students?.name || '자녀',
-      studentGrade: r.students?.grade || 0,
-      studentAvatar: r.students?.avatar || '',
-      relationship: r.relationship,
-    }));
-
-    setMyAcademies(academies);
-
-    const saved = localStorage.getItem(SELECTED_ACADEMY_KEY);
-    const validSaved = academies.find(a => a.academyId === saved);
-    if (validSaved) {
-      setSelectedAcademyId(saved);
-    } else if (academies.length > 0) {
-      setSelectedAcademyId(academies[0].academyId);
-      localStorage.setItem(SELECTED_ACADEMY_KEY, academies[0].academyId);
-    } else {
-      setSelectedAcademyId(null);
     }
   };
 
