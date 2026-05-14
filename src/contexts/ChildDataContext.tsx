@@ -1,25 +1,33 @@
-import { createContext, useContext, useState, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
 import type { Child, WeeklyReport } from '../data/types';
-import { weeklyReports } from '../data/mockData';
 import { useAuth } from './AuthContext';
+import { fetchWeekInputs, getWeekRange } from '../lib/dataFetcher';
+import {
+  calculateFiveAxis,
+  calculateTrends,
+  generateHashtags,
+  suggestParentActions,
+  generateSeasonInsight,
+  type WeekInputs,
+} from '../utils/statsCalculator';
 
 interface ChildDataContextType {
   currentChild: Child;
   currentWeekIndex: number;
-  currentReport: WeeklyReport;
-  allReports: WeeklyReport[];
-  setCurrentWeekIndex: (index: number) => void;
+  currentReport: WeeklyReport | null;
+  isLoadingReport: boolean;
   goToPreviousWeek: () => void;
   goToNextWeek: () => void;
   canGoNext: boolean;
   canGoPrevious: boolean;
-  // 학원 메타 정보
   academyName: string;
+  hasData: boolean;
 }
 
 const ChildDataContext = createContext<ChildDataContextType | undefined>(undefined);
 
-// 학년 → 학교 표기 변환
+const MAX_PAST_WEEKS = 12;
+
 function gradeToLabel(grade: number): string {
   if (grade >= 1 && grade <= 6) return `초등학교 ${grade}학년`;
   if (grade >= 7 && grade <= 9) return `중학교 ${grade - 6}학년`;
@@ -28,15 +36,15 @@ function gradeToLabel(grade: number): string {
 }
 
 function gradeToAge(grade: number): number {
-  // 초1 = 7세 기준
   return grade + 6;
 }
 
 export function ChildDataProvider({ children: childrenProp }: { children: ReactNode }) {
   const { currentAcademy } = useAuth();
-  const [currentWeekIndex, setCurrentWeekIndex] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [currentReport, setCurrentReport] = useState<WeeklyReport | null>(null);
+  const [isLoadingReport, setIsLoadingReport] = useState(true);
 
-  // 실제 자녀 정보 (Supabase 기반)로 Child 객체 구성
   const currentChild: Child = useMemo(() => {
     if (currentAcademy) {
       return {
@@ -47,7 +55,6 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
         avatar: currentAcademy.studentAvatar || 'https://api.dicebear.com/7.x/thumbs/svg?seed=child',
       };
     }
-    // fallback (인증 안 된 상태에서 일시적으로 렌더링)
     return {
       id: '0',
       name: '자녀',
@@ -57,33 +64,101 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
     };
   }, [currentAcademy]);
 
-  // 일단 Mock 리포트 사용 (Step 2~3에서 실제 데이터로 교체 예정)
-  const currentReport = useMemo(() => weeklyReports[currentWeekIndex], [currentWeekIndex]);
+  useEffect(() => {
+    if (!currentAcademy) {
+      setCurrentReport(null);
+      setIsLoadingReport(false);
+      return;
+    }
 
-  const canGoNext = currentWeekIndex > 0;
-  const canGoPrevious = currentWeekIndex < weeklyReports.length - 1;
+    let cancelled = false;
+    const load = async () => {
+      setIsLoadingReport(true);
+      try {
+        const { start, end } = getWeekRange(weekOffset);
+        const prevWeek = getWeekRange(weekOffset - 1);
+
+        const [thisInputs, prevInputs] = await Promise.all([
+          fetchWeekInputs(currentAcademy.studentId, start, end),
+          fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
+        ]);
+
+        if (cancelled) return;
+
+        const inputsWithPrev: WeekInputs = {
+          ...thisInputs,
+          prevWeekScores: prevInputs.scores,
+        };
+
+        const stats = calculateFiveAxis(inputsWithPrev, currentAcademy.studentGrade);
+        const trends = calculateTrends(thisInputs.scores, prevInputs.scores);
+        const hashtags = generateHashtags(stats, thisInputs);
+        const parentActions = suggestParentActions(stats);
+        const seasonInsight = generateSeasonInsight(stats, currentAcademy.studentName);
+
+        const report: WeeklyReport = {
+          weekId: start,
+          startDate: start,
+          endDate: end,
+          stats,
+          trends: trends.map(t => ({
+            subject: t.subject,
+            trend: t.trend,
+            changePercent: t.changePercent,
+          })),
+          insights: {
+            hashtags,
+            parentActions,
+            seasonInsight,
+          },
+        };
+
+        setCurrentReport(report);
+      } catch (err) {
+        console.error('[ChildData] load error:', err);
+        if (!cancelled) setCurrentReport(null);
+      } finally {
+        if (!cancelled) setIsLoadingReport(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAcademy, weekOffset]);
+
+  const canGoNext = weekOffset < 0;
+  const canGoPrevious = weekOffset > -MAX_PAST_WEEKS;
 
   const goToPreviousWeek = () => {
-    if (canGoPrevious) setCurrentWeekIndex(prev => prev + 1);
+    if (canGoPrevious) setWeekOffset(prev => prev - 1);
   };
   const goToNextWeek = () => {
-    if (canGoNext) setCurrentWeekIndex(prev => prev - 1);
+    if (canGoNext) setWeekOffset(prev => prev + 1);
   };
+
+  const hasData = useMemo(() => {
+    if (!currentReport) return false;
+    const { stats } = currentReport;
+    return !(stats.focus === 60 && stats.growthMind === 60 &&
+             stats.comprehension === 60 && stats.energy === 60);
+  }, [currentReport]);
 
   const value = useMemo(
     () => ({
       currentChild,
-      currentWeekIndex,
+      currentWeekIndex: -weekOffset,
       currentReport,
-      allReports: weeklyReports,
-      setCurrentWeekIndex,
+      isLoadingReport,
       goToPreviousWeek,
       goToNextWeek,
       canGoNext,
       canGoPrevious,
       academyName: currentAcademy?.academyName || '학원',
+      hasData,
     }),
-    [currentChild, currentWeekIndex, currentReport, canGoNext, canGoPrevious, currentAcademy]
+    [currentChild, weekOffset, currentReport, isLoadingReport, canGoNext, canGoPrevious, currentAcademy, hasData]
   );
 
   return (
