@@ -48,24 +48,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-
     const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!cancelled) {
+      console.log('[AUTH] init start');
+      try {
+        const { data } = await supabase.auth.getSession();
+        console.log('[AUTH] getSession done, user:', data.session?.user?.id);
         setSession(data.session);
         if (data.session) {
           await loadParentAndAcademies(data.session.user.id);
         }
+      } catch (err) {
+        console.error('[AUTH] init error:', err);
+      } finally {
+        console.log('[AUTH] init finally');
         setIsLoading(false);
       }
     };
     init();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log('[AUTH] state change:', event);
       setSession(newSession);
       if (newSession) {
-        await loadParentAndAcademies(newSession.user.id);
+        try {
+          await loadParentAndAcademies(newSession.user.id);
+        } catch (err) {
+          console.error('[AUTH] state change error:', err);
+        }
       } else {
         setParent(null);
         setMyAcademies([]);
@@ -74,7 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      cancelled = true;
       sub.subscription.unsubscribe();
     };
   }, []);
