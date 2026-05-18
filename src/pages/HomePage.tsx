@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, ChevronDown, Check, Sparkles } from 'lucide-react';
 import { useChildData } from '../contexts/ChildDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDateRange, getRelativeWeekLabel } from '../utils/dateUtils';
@@ -9,12 +9,25 @@ import PentagonChart from '../components/stats/PentagonChart';
 import SeasonInsightCard from '../components/insight/SeasonInsightCard';
 import ParentActionCard from '../components/insight/ParentActionCard';
 
+// 스켈레톤 컴포넌트
+function CardSkeleton({ height = 200 }: { height?: number }) {
+  return (
+    <div
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative"
+      style={{ height }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 animate-shimmer" />
+    </div>
+  );
+}
+
 export default function HomePage() {
   const {
     currentChild,
     currentReport,
     currentWeekIndex,
     isLoadingReport,
+    isAIGenerated,
     goToPreviousWeek,
     goToNextWeek,
     canGoNext,
@@ -25,6 +38,12 @@ export default function HomePage() {
 
   const [showSelector, setShowSelector] = useState(false);
   const hasMultiple = myAcademies.length > 1;
+
+  // 주차 전환 시 fade 효과를 위한 key
+  const [contentKey, setContentKey] = useState(0);
+  useEffect(() => {
+    if (currentReport) setContentKey(k => k + 1);
+  }, [currentReport?.weekId]);
 
   if (myAcademies.length === 0) {
     return (
@@ -41,6 +60,7 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-24">
+      {/* 헤더 */}
       <header className="text-center py-3 relative">
         <button
           onClick={() => hasMultiple && setShowSelector(!showSelector)}
@@ -88,12 +108,13 @@ export default function HomePage() {
         )}
       </header>
 
+      {/* 날짜 네비게이션 */}
       <div className="flex items-center justify-between bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
         <button
           onClick={goToPreviousWeek}
-          disabled={!canGoPrevious}
+          disabled={!canGoPrevious || isLoadingReport}
           className={`p-2 rounded-lg transition-colors ${
-            canGoPrevious ? 'hover:bg-gray-100 text-gray-700' : 'text-gray-300 cursor-not-allowed'
+            canGoPrevious && !isLoadingReport ? 'hover:bg-gray-100 text-gray-700' : 'text-gray-300 cursor-not-allowed'
           }`}
         >
           <ChevronLeft className="w-5 h-5" />
@@ -102,43 +123,61 @@ export default function HomePage() {
           <p className="text-sm font-medium text-primary-600">
             {getRelativeWeekLabel(currentWeekIndex)}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 transition-opacity duration-300">
             {currentReport ? formatDateRange(currentReport.startDate, currentReport.endDate) : '...'}
           </p>
         </div>
         <button
           onClick={goToNextWeek}
-          disabled={!canGoNext}
+          disabled={!canGoNext || isLoadingReport}
           className={`p-2 rounded-lg transition-colors ${
-            canGoNext ? 'hover:bg-gray-100 text-gray-700' : 'text-gray-300 cursor-not-allowed'
+            canGoNext && !isLoadingReport ? 'hover:bg-gray-100 text-gray-700' : 'text-gray-300 cursor-not-allowed'
           }`}
         >
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4 flex items-center animate-scaleIn">
+      {/* 아바타 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4 flex items-center">
         <ChildAvatar child={currentChild} size="lg" />
       </div>
 
+      {/* 로딩 중 - 스켈레톤 */}
       {isLoadingReport && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-sm text-gray-400">
-          데이터 분석 중...
+        <div className="flex flex-col gap-4">
+          <CardSkeleton height={380} />
+          <CardSkeleton height={120} />
+          <CardSkeleton height={240} />
         </div>
       )}
 
+      {/* 데이터 있을 때 - fade 전환 */}
       {!isLoadingReport && currentReport && (
-        <>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">
+        <div
+          key={contentKey}
+          className="flex flex-col gap-4 animate-fadeIn"
+        >
+          {/* 5각형 + 해시태그 카드 */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 relative">
+            {/* AI 생성 뱃지 */}
+            {isAIGenerated && (
+              <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 bg-purple-50 rounded-full border border-purple-100">
+                <Sparkles className="w-3 h-3 text-purple-500" />
+                <span className="text-[10px] font-medium text-purple-600">AI 분석</span>
+              </div>
+            )}
+
             <PentagonChart stats={currentReport.stats} />
             <div className="border-t border-gray-100" />
             {currentReport.insights.hashtags.length > 0 && (
               <div className="overflow-x-auto scrollbar-hide">
                 <div className="flex flex-nowrap gap-1.5 py-1">
-                  {currentReport.insights.hashtags.map((tag) => (
+                  {currentReport.insights.hashtags.map((tag, idx) => (
                     <span
                       key={tag}
-                      className="whitespace-nowrap px-2 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-medium rounded-full border border-gray-100"
+                      className="whitespace-nowrap px-2 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-medium rounded-full border border-gray-100 animate-slideInRight"
+                      style={{ animationDelay: `${600 + idx * 80}ms`, animationFillMode: 'both' }}
                     >
                       {tag.startsWith('#') ? tag : `#${tag}`}
                     </span>
@@ -148,19 +187,26 @@ export default function HomePage() {
             )}
           </div>
 
-          <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
+          <div style={{ animationDelay: '300ms', animationFillMode: 'both' }} className="animate-fadeIn">
+            <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
+          </div>
 
           {currentReport.insights.parentActions.length > 0 && (
-            <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
+            <div style={{ animationDelay: '450ms', animationFillMode: 'both' }} className="animate-fadeIn">
+              <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
+            </div>
           )}
 
           {currentReport.trends.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
+            <div
+              style={{ animationDelay: '600ms', animationFillMode: 'both' }}
+              className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-fadeIn"
+            >
               <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-tighter">Weekly Trend</h3>
               <TrendCard trends={currentReport.trends} />
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
