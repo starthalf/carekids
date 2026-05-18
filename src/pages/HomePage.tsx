@@ -8,18 +8,7 @@ import TrendCard from '../components/trend/TrendCard';
 import PentagonChart from '../components/stats/PentagonChart';
 import SeasonInsightCard from '../components/insight/SeasonInsightCard';
 import ParentActionCard from '../components/insight/ParentActionCard';
-
-// 스켈레톤 컴포넌트
-function CardSkeleton({ height = 200 }: { height?: number }) {
-  return (
-    <div
-      className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative"
-      style={{ height }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 animate-shimmer" />
-    </div>
-  );
-}
+import ReportSkeleton from '../components/skeleton/ReportSkeleton';
 
 export default function HomePage() {
   const {
@@ -143,14 +132,8 @@ export default function HomePage() {
         <ChildAvatar child={currentChild} size="lg" />
       </div>
 
-      {/* 로딩 중 - 스켈레톤 */}
-      {isLoadingReport && (
-        <div className="flex flex-col gap-4">
-          <CardSkeleton height={380} />
-          <CardSkeleton height={120} />
-          <CardSkeleton height={240} />
-        </div>
-      )}
+      {/* 로딩 중 - 실제 구조 닮은 스켈레톤 */}
+      {isLoadingReport && <ReportSkeleton />}
 
       {/* 데이터 있을 때 - fade 전환 */}
       {!isLoadingReport && currentReport && (
