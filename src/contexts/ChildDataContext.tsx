@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
 import type { Child, WeeklyReport } from '../data/types';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 import { fetchWeekInputs, getWeekRange } from '../lib/dataFetcher';
 import {
   calculateFiveAxis,
@@ -16,6 +17,7 @@ interface ChildDataContextType {
   currentWeekIndex: number;
   currentReport: WeeklyReport | null;
   isLoadingReport: boolean;
+  isAIGenerated: boolean;          // ← Step 3: AI 캐시인지 fallback인지
   goToPreviousWeek: () => void;
   goToNextWeek: () => void;
   canGoNext: boolean;
@@ -44,6 +46,7 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
   const [weekOffset, setWeekOffset] = useState(0);
   const [currentReport, setCurrentReport] = useState<WeeklyReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(true);
+  const [isAIGenerated, setIsAIGenerated] = useState(false);
 
   const currentChild: Child = useMemo(() => {
     if (currentAcademy) {
@@ -77,87 +80,95 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
       setIsLoadingReport(true);
       try {
         const { start, end } = getWeekRange(weekOffset);
-        const prevWeek = getWeekRange(weekOffset - 1);
 
-        // 10초 timeout
-        const timeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('fetch timeout 10s')), 10000)
-        );
-
-        const fetchAll = Promise.all([
-          fetchWeekInputs(currentAcademy.studentId, start, end),
-          fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
-        ]);
-
-        const [thisInputs, prevInputs] = await Promise.race([fetchAll, timeout]) as Awaited<typeof fetchAll>;
-        console.log('[ChildData] fetch done');
+        // 1. weekly_insights 캐시 먼저 조회
+        const { data: cached, error: cacheErr } = await supabase
+          .from('weekly_insights')
+          .select('*')
+          .eq('student_id', currentAcademy.studentId)
+          .eq('week_start', start)
+          .maybeSingle();
 
         if (cancelled) return;
 
-        const inputsWithPrev: WeekInputs = {
-          ...thisInputs,
-          prevWeekScores: prevInputs.scores,
-        };
-
-        const stats = calculateFiveAxis(inputsWithPrev, currentAcademy.studentGrade);
-        const trends = calculateTrends(thisInputs.scores, prevInputs.scores);
-        const hashtags = generateHashtags(stats, thisInputs);
-        const parentActions = suggestParentActions(stats);
-        const seasonInsight = generateSeasonInsight(stats, currentAcademy.studentName);
-
-        const report: WeeklyReport = {
-          weekId: start,
-          startDate: start,
-          endDate: end,
-          stats,
-          trends: trends.map(t => ({
-            subject: t.subject,
-            trend: t.trend,
-            changePercent: t.changePercent,
-          })),
-          insights: {
-            hashtags,
-            parentActions,
-            seasonInsight,
-          },
-        };
-
-        setCurrentReport(report);
+        if (cached && !cacheErr) {
+          // 캐시 hit! AI가 생성한 리포트
+          console.log('[ChildData] cache hit (AI generated)');
+          const report: WeeklyReport = {
+            weekId: start,
+            startDate: start,
+            endDate: end,
+            stats: cached.stats,
+            trends: cached.trends || [],
+            insights: {
+              hashtags: cached.hashtags || [],
+              parentActions: cached.parent_actions || [],
+              seasonInsight: cached.season_insight,
+            },
+          };
+          setCurrentReport(report);
+          setIsAIGenerated(true);
+        } else {
+          // 캐시 miss - Step 2 fallback (단순 룰 계산)
+          console.log('[ChildData] cache miss, falling back to client calculation');
+          await loadFallback(start, end, cancelled);
+        }
       } catch (err) {
         console.error('[ChildData] load error:', err);
         if (!cancelled) {
-          if (err instanceof Error && err.message.includes('timeout')) {
-            console.warn('[ChildData] timeout - keeping existing report');
-          } else {
-            setCurrentReport(null);
-          }
+          setCurrentReport(null);
+          setIsAIGenerated(false);
         }
       } finally {
         if (!cancelled) setIsLoadingReport(false);
       }
     };
 
-    load();
-    return () => {
-      cancelled = true;
+    const loadFallback = async (start: string, end: string, cancelled: boolean) => {
+      const prevWeek = getWeekRange(weekOffset - 1);
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('fetch timeout 10s')), 10000)
+      );
+      const fetchAll = Promise.all([
+        fetchWeekInputs(currentAcademy.studentId, start, end),
+        fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
+      ]);
+      const [thisInputs, prevInputs] = await Promise.race([fetchAll, timeout]) as Awaited<typeof fetchAll>;
+      if (cancelled) return;
+
+      const inputsWithPrev: WeekInputs = { ...thisInputs, prevWeekScores: prevInputs.scores };
+      const stats = calculateFiveAxis(inputsWithPrev, currentAcademy.studentGrade);
+      const trends = calculateTrends(thisInputs.scores, prevInputs.scores);
+      const hashtags = generateHashtags(stats, thisInputs);
+      const parentActions = suggestParentActions(stats);
+      const seasonInsight = generateSeasonInsight(stats, currentAcademy.studentName);
+
+      const report: WeeklyReport = {
+        weekId: start,
+        startDate: start,
+        endDate: end,
+        stats,
+        trends: trends.map(t => ({ subject: t.subject, trend: t.trend, changePercent: t.changePercent })),
+        insights: { hashtags, parentActions, seasonInsight },
+      };
+      setCurrentReport(report);
+      setIsAIGenerated(false);
     };
+
+    load();
+    return () => { cancelled = true; };
   }, [currentAcademy, weekOffset]);
 
   const canGoNext = weekOffset < 0;
   const canGoPrevious = weekOffset > -MAX_PAST_WEEKS;
 
-  const goToPreviousWeek = () => {
-    if (canGoPrevious) setWeekOffset(prev => prev - 1);
-  };
-  const goToNextWeek = () => {
-    if (canGoNext) setWeekOffset(prev => prev + 1);
-  };
+  const goToPreviousWeek = () => { if (canGoPrevious) setWeekOffset(p => p - 1); };
+  const goToNextWeek = () => { if (canGoNext) setWeekOffset(p => p + 1); };
 
   const hasData = useMemo(() => {
     if (!currentReport) return false;
     const { stats } = currentReport;
-    return !(stats.focus === 60 && stats.growthMind === 60 &&
-             stats.comprehension === 60 && stats.energy === 60);
+    return !(stats.focus === 60 && stats.growthMind === 60 && stats.comprehension === 60 && stats.energy === 60);
   }, [currentReport]);
 
   const value = useMemo(
@@ -166,6 +177,7 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
       currentWeekIndex: -weekOffset,
       currentReport,
       isLoadingReport,
+      isAIGenerated,
       goToPreviousWeek,
       goToNextWeek,
       canGoNext,
@@ -173,7 +185,7 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
       academyName: currentAcademy?.academyName || '학원',
       hasData,
     }),
-    [currentChild, weekOffset, currentReport, isLoadingReport, canGoNext, canGoPrevious, currentAcademy, hasData]
+    [currentChild, weekOffset, currentReport, isLoadingReport, isAIGenerated, canGoNext, canGoPrevious, currentAcademy, hasData]
   );
 
   return (
@@ -183,8 +195,6 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
 
 export function useChildData() {
   const context = useContext(ChildDataContext);
-  if (context === undefined) {
-    throw new Error('useChildData must be used within a ChildDataProvider');
-  }
+  if (context === undefined) throw new Error('useChildData must be used within a ChildDataProvider');
   return context;
 }
