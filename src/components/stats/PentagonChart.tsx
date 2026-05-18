@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   RadarChart,
   PolarGrid,
@@ -13,7 +14,24 @@ interface PentagonChartProps {
 }
 
 export default function PentagonChart({ stats }: PentagonChartProps) {
-  const data = getStatsForRadarChart(stats);
+  // stats가 바뀔 때마다 0에서 시작해서 차오르도록
+  const [animatedStats, setAnimatedStats] = useState<WeeklyStats>({
+    focus: 0,
+    growthMind: 0,
+    comprehension: 0,
+    logic: 0,
+    energy: 0,
+  });
+
+  useEffect(() => {
+    // 다음 프레임에 실제 값으로 업데이트 → Recharts가 자동으로 0→실제값 트윈
+    const t = setTimeout(() => {
+      setAnimatedStats(stats);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [stats]);
+
+  const data = getStatsForRadarChart(animatedStats);
 
   return (
     <div className="w-full flex flex-col items-center">
@@ -36,6 +54,9 @@ export default function PentagonChart({ stats }: PentagonChartProps) {
               fill="#7c3aed"
               fillOpacity={0.25}
               strokeWidth={2}
+              isAnimationActive={true}
+              animationDuration={1200}
+              animationEasing="ease-out"
               dot={{
                 r: 4,
                 fill: '#7c3aed',
