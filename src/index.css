@@ -27,3 +27,64 @@ body {
     animation-delay: 400ms;
   }
 }
+/* 1. 스켈레톤 shimmer */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+ 
+.animate-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.05) 50%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+ 
+/* 2. fadeIn (주차 전환 + stagger 등장) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+ 
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+ 
+/* 3. 해시태그 슬라이드 인 */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+ 
+.animate-slideInRight {
+  animation: slideInRight 0.4s ease-out;
+}
+ 
+/* 스크롤바 숨기기 (이미 있으면 중복 제거) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
