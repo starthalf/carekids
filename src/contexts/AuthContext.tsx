@@ -21,13 +21,11 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
 
-  // 학원 - 자녀 목록
   myAcademies: ParentAcademy[];
   selectedAcademyId: string | null;
   selectAcademy: (academyId: string) => void;
   currentAcademy: ParentAcademy | null;
 
-  // Auth
   signUpFromInvite: (params: { token: string; name: string; email: string; password: string; phone?: string }) => Promise<{ error?: string }>;
   acceptInviteForExistingParent: (token: string) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
@@ -87,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
- const loadParentAndAcademies = async (authUserId: string) => {
+  const loadParentAndAcademies = async (authUserId: string) => {
     console.log('[LOAD] parent query start');
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('parent query timeout 10s')), 10000)
@@ -152,7 +150,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error('[LOAD] error:', err);
-      // timeout이면 기존 상태 유지 (로그아웃 막기)
       if (err instanceof Error && err.message.includes('timeout')) {
         console.warn('[LOAD] timeout - keeping existing state');
         return;
@@ -174,7 +171,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 신규 부모 가입 (초대 링크로)
   const signUpFromInvite = async (params: { token: string; name: string; email: string; password: string; phone?: string }) => {
     const { token, name, email, password, phone } = params;
 
@@ -187,13 +183,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (inviteErr || !invite) return { error: '유효하지 않은 초대 링크입니다' };
     if (new Date(invite.expires_at) < new Date()) return { error: '만료된 초대 링크입니다' };
 
-    // Auth 가입
     const { data: authData, error: authErr } = await supabase.auth.signUp({ email, password });
     if (authErr || !authData.user) return { error: authErr?.message || '가입 실패' };
 
     const userId = authData.user.id;
 
-    // parent row 생성
     const { data: newParent, error: pErr } = await supabase
       .from('parents')
       .insert({ auth_user_id: userId, name, email, phone: phone || null })
@@ -201,7 +195,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
     if (pErr || !newParent) return { error: `부모 정보 생성 실패: ${pErr?.message}` };
 
-    // parent_students 연결
     const { error: psErr } = await supabase
       .from('parent_students')
       .upsert(
@@ -217,7 +210,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
     if (psErr) return { error: psErr.message };
 
-    // 초대 사용 처리
     await supabase
       .from('parent_invites')
       .update({ status: 'used', used_by_parent_id: newParent.id, used_at: new Date().toISOString() })
@@ -227,7 +219,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {};
   };
 
-  // 이미 로그인된 부모가 새 학원 초대를 받음
   const acceptInviteForExistingParent = async (token: string) => {
     const { data: invite, error: inviteErr } = await supabase
       .from('parent_invites')
@@ -269,7 +260,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .update({ status: 'used', used_by_parent_id: parentRow.id, used_at: new Date().toISOString() })
       .eq('id', invite.id);
 
-    // 새 학원으로 자동 선택
     selectAcademy(invite.academy_id);
     await loadParentAndAcademies(userId);
     return {};

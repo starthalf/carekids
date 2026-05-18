@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Calendar, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react';
-import { useChildData } from '../contexts/ChildDataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchWeekInputs, getWeekRange } from '../lib/dataFetcher';
 import { calculateFiveAxis, generateHashtags } from '../utils/statsCalculator';
@@ -18,7 +17,6 @@ interface HistoryItem {
 const WEEKS_TO_SHOW = 8;
 
 export default function HistoryPage() {
-  const { goToPreviousWeek, currentWeekIndex } = useChildData();
   const { currentAcademy } = useAuth();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -73,22 +73,24 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
 
     let cancelled = false;
     const load = async () => {
+      console.log('[ChildData] load start, weekOffset:', weekOffset);
       setIsLoadingReport(true);
       try {
         const { start, end } = getWeekRange(weekOffset);
         const prevWeek = getWeekRange(weekOffset - 1);
 
-      const timeout = new Promise<never>((_, reject) =>
+        // 10초 timeout
+        const timeout = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('fetch timeout 10s')), 10000)
         );
 
-        const [thisInputs, prevInputs] = await Promise.race([
-          Promise.all([
-            fetchWeekInputs(currentAcademy.studentId, start, end),
-            fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
-          ]),
-          timeout,
-        ]) as Awaited<ReturnType<typeof fetchWeekInputs>>[];
+        const fetchAll = Promise.all([
+          fetchWeekInputs(currentAcademy.studentId, start, end),
+          fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
+        ]);
+
+        const [thisInputs, prevInputs] = await Promise.race([fetchAll, timeout]) as Awaited<typeof fetchAll>;
+        console.log('[ChildData] fetch done');
 
         if (cancelled) return;
 
@@ -123,7 +125,13 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
         setCurrentReport(report);
       } catch (err) {
         console.error('[ChildData] load error:', err);
-        if (!cancelled) setCurrentReport(null);
+        if (!cancelled) {
+          if (err instanceof Error && err.message.includes('timeout')) {
+            console.warn('[ChildData] timeout - keeping existing report');
+          } else {
+            setCurrentReport(null);
+          }
+        }
       } finally {
         if (!cancelled) setIsLoadingReport(false);
       }
