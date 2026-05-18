@@ -1,23 +1,26 @@
 import { supabase } from '../lib/supabase';
 import type { WeekInputs } from '../utils/statsCalculator';
 
-// ISO 주차 → 시작/끝 날짜
 export function getWeekRange(weekOffset: number = 0): { start: string; end: string; label: string } {
   const today = new Date();
-  // 이번 주 월요일 찾기
-  const dayOfWeek = today.getDay();  // 0(일) ~ 6(토)
+  const dayOfWeek = today.getDay();
   const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
   const monday = new Date(today);
   monday.setDate(today.getDate() + daysToMonday + weekOffset * 7);
   monday.setHours(0, 0, 0, 0);
 
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
 
-  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  // 로컬 시간 기준 YYYY-MM-DD 포맷 (toISOString 사용 X)
+  const fmt = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
-  // 라벨
   let label = '';
   if (weekOffset === 0) label = '이번 주';
   else if (weekOffset === -1) label = '지난 주';
