@@ -23,7 +23,7 @@ export default function HomePage() {
     canGoPrevious,
     academyName,
   } = useChildData();
-  const { myAcademies, selectedAcademyId, selectAcademy } = useAuth();
+  const { myAcademies, selectedKey, selectAcademy, isOwnerPreview } = useAuth();
 
   const [showSelector, setShowSelector] = useState(false);
   const hasMultiple = myAcademies.length > 1;
@@ -49,6 +49,19 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-24">
+      {/* 학원장 미리보기 배너 */}
+      {isOwnerPreview && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2">
+          <div className="text-amber-600 shrink-0 mt-0.5">👀</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-amber-800">원장 미리보기 모드</p>
+            <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+              학부모님께 보이는 실제 화면입니다. 학생을 바꾸려면 상단을 눌러주세요.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 헤더 */}
       <header className="text-center py-3 relative">
         <button
@@ -71,11 +84,11 @@ export default function HomePage() {
                 <button
                   key={a.parentStudentId}
                   onClick={() => {
-                    selectAcademy(a.academyId);
+                    selectAcademy(a.parentStudentId);
                     setShowSelector(false);
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-left ${
-                    a.academyId === selectedAcademyId ? 'bg-primary-50' : 'hover:bg-gray-50'
+                    a.parentStudentId === selectedKey ? 'bg-primary-50' : 'hover:bg-gray-50'
                   }`}
                 >
                   <img
@@ -85,9 +98,14 @@ export default function HomePage() {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 text-sm truncate">{a.studentName}</p>
-                    <p className="text-xs text-gray-500 truncate">{a.academyName}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {a.academyName}
+                      {a.source === 'owner_preview' && (
+                        <span className="ml-1 text-[10px] text-amber-600">· 원장 미리보기</span>
+                      )}
+                    </p>
                   </div>
-                  {a.academyId === selectedAcademyId && (
+                  {a.parentStudentId === selectedKey && (
                     <Check size={16} className="text-primary-600 shrink-0" />
                   )}
                 </button>
