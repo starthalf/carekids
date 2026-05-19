@@ -43,7 +43,9 @@ function gradeToAge(grade: number): number {
 
 export function ChildDataProvider({ children: childrenProp }: { children: ReactNode }) {
   const { currentAcademy } = useAuth();
-  const [weekOffset, setWeekOffset] = useState(0);
+  // 디폴트: 지난 한 주 (W-1). 배치는 일요일에 끝난 한 주를 처리하므로
+  // 부모가 보는 디폴트도 "방금 완결된 한 주"가 되어야 함.
+  const [weekOffset, setWeekOffset] = useState(-1);
   const [currentReport, setCurrentReport] = useState<WeeklyReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(true);
   const [isAIGenerated, setIsAIGenerated] = useState(false);
@@ -159,7 +161,8 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
     return () => { cancelled = true; };
   }, [currentAcademy, weekOffset]);
 
-  const canGoNext = weekOffset < 0;
+  // W-1이 최신 리포트. W(진행 중인 주)나 미래 주차는 보여주지 않음.
+  const canGoNext = weekOffset < -1;
   const canGoPrevious = weekOffset > -MAX_PAST_WEEKS;
 
   const goToPreviousWeek = () => { if (canGoPrevious) setWeekOffset(p => p - 1); };
@@ -197,4 +200,4 @@ export function useChildData() {
   const context = useContext(ChildDataContext);
   if (context === undefined) throw new Error('useChildData must be used within a ChildDataProvider');
   return context;
-} 
+}
