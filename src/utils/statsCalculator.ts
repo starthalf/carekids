@@ -295,6 +295,124 @@ function avgForSubject(records: ScoreRecord[], subject: string): number | null {
 }
 
 // ============================================================
+// 트렌드 계산 v2: 다중 주차 + Fallback 윈도우 + 추세선
+// ============================================================
+// 변경점:
+//   1. 비교 윈도우 확장: W-1 우선, 없으면 W-2/W-3까지 fallback
+//   2. 4주 이상 데이터 있으면 선형 회귀 기울기로 추세
+//   3. 임계값 ±3% → ±5%로 완화 (덜 민감)
+//   4. 비교 불가 케이스는 결과에서 제외 (stable 남발 방지)
+//   5. testType 가중 (monthly 3 > weekly 2 > daily 1)
+
+// testType 가중 평균
+function avgForSubjectWeighted(records: ScoreRecord[], subject: string): number | null {
+  const filtered = records.filter(r => r.subject === subject);
+  if (filtered.length === 0) return null;
+  const weights: Record<string, number> = { monthly: 3, weekly: 2, daily: 1 };
+  let totalWeight = 0;
+  let weightedSum = 0;
+  filtered.forEach(r => {
+    const w = weights[(r as any).testType || 'daily'] || 1;
+    weightedSum += (r.score / r.maxScore) * 100 * w;
+    totalWeight += w;
+  });
+  return totalWeight > 0 ? weightedSum / totalWeight : null;
+}
+
+// 선형 회귀 기울기 (최소제곱법). 한 주당 변화율(%p).
+function linearSlope(points: { x: number; y: number }[]): number {
+  const n = points.length;
+  if (n < 2) return 0;
+  const sumX = points.reduce((s, p) => s + p.x, 0);
+  const sumY = points.reduce((s, p) => s + p.y, 0);
+  const sumXY = points.reduce((s, p) => s + p.x * p.y, 0);
+  const sumXX = points.reduce((s, p) => s + p.x * p.x, 0);
+  const denom = n * sumXX - sumX * sumX;
+  if (denom === 0) return 0;
+  return (n * sumXY - sumX * sumY) / denom;
+}
+
+export interface SubjectTrendV2 extends SubjectTrend {
+  thisAvg?: number;
+  prevAvg?: number;
+  comparedWeeks?: number;
+  method?: 'direct' | 'fallback' | 'regression';
+}
+
+/**
+ * @param weeks 최근 주차들. 인덱스 0=W(이번주), 1=W-1, 2=W-2, 3=W-3
+ *              최소 1개, 최대 4개 활용
+ */
+export function calculateTrendsV2(weeks: ScoreRecord[][]): SubjectTrendV2[] {
+  if (weeks.length === 0 || weeks[0].length === 0) return [];
+
+  const thisWeek = weeks[0];
+  const subjects = new Set<string>();
+  thisWeek.forEach(s => s.subject && subjects.add(s.subject));
+
+  const results: SubjectTrendV2[] = [];
+  const UP_THRESHOLD = 5;
+  const DOWN_THRESHOLD = -5;
+
+  subjects.forEach(subject => {
+    const thisAvg = avgForSubjectWeighted(thisWeek, subject);
+    if (thisAvg === null) return;
+
+    // 각 주차의 과목 평균 수집
+    const weekAvgs: { weekIdx: number; avg: number }[] = [];
+    weeks.forEach((week, idx) => {
+      const a = avgForSubjectWeighted(week, subject);
+      if (a !== null) weekAvgs.push({ weekIdx: idx, avg: a });
+    });
+
+    // 케이스 1: 4주 데이터 충분 → 선형 회귀
+    if (weekAvgs.length >= 4) {
+      const points = weekAvgs
+        .map(w => ({ x: -w.weekIdx, y: w.avg }))
+        .sort((a, b) => a.x - b.x);
+      const slope = linearSlope(points);
+      const changePercent = Math.round((slope / thisAvg) * 100);
+      let trend: 'up' | 'down' | 'stable' = 'stable';
+      if (changePercent >= UP_THRESHOLD) trend = 'up';
+      else if (changePercent <= DOWN_THRESHOLD) trend = 'down';
+      results.push({
+        subject,
+        trend,
+        changePercent,
+        thisAvg: Math.round(thisAvg),
+        comparedWeeks: weekAvgs.length,
+        method: 'regression',
+      });
+      return;
+    }
+
+    // 케이스 2: W-1 우선, 없으면 W-2, W-3 fallback (가장 최근 과거 주차)
+    const prevWeek = weekAvgs.find(w => w.weekIdx >= 1);
+    if (!prevWeek) {
+      // 비교 불가 → 결과에서 제외 (stable로 push하지 않음)
+      return;
+    }
+
+    const changePercent = Math.round(((thisAvg - prevWeek.avg) / prevWeek.avg) * 100);
+    let trend: 'up' | 'down' | 'stable' = 'stable';
+    if (changePercent >= UP_THRESHOLD) trend = 'up';
+    else if (changePercent <= DOWN_THRESHOLD) trend = 'down';
+
+    results.push({
+      subject,
+      trend,
+      changePercent,
+      thisAvg: Math.round(thisAvg),
+      prevAvg: Math.round(prevWeek.avg),
+      comparedWeeks: weekAvgs.length,
+      method: prevWeek.weekIdx === 1 ? 'direct' : 'fallback',
+    });
+  });
+
+  return results;
+}
+
+// ============================================================
 // 해시태그 - 일단 단순한 규칙 (Step 3에서 AI화)
 // ============================================================
 export function generateHashtags(stats: FiveAxisStats, inputs: WeekInputs): string[] {
