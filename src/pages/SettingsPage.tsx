@@ -10,7 +10,7 @@ const menuItems = [
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const { parent, myAcademies, selectedAcademyId, selectAcademy, signOut } = useAuth();
+  const { parent, myAcademies, selectedKey, selectAcademy, signOut } = useAuth();
 
   const handleLogout = async () => {
     if (!confirm('로그아웃 하시겠습니까?')) return;
@@ -37,9 +37,9 @@ export default function SettingsPage() {
             {myAcademies.map((a) => (
               <button
                 key={a.parentStudentId}
-                onClick={() => selectAcademy(a.academyId)}
+                onClick={() => selectAcademy(a.parentStudentId)}
                 className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
-                  a.academyId === selectedAcademyId
+                  a.parentStudentId === selectedKey
                     ? 'border-primary-500 bg-primary-50'
                     : 'border-gray-100 hover:border-gray-200'
                 }`}
@@ -51,9 +51,14 @@ export default function SettingsPage() {
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-800 text-sm truncate">{a.studentName}</p>
-                  <p className="text-xs text-gray-500 truncate">{a.academyName}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {a.academyName}
+                    {a.source === 'owner_preview' && (
+                      <span className="ml-1 text-[10px] text-amber-600">· 원장 미리보기</span>
+                    )}
+                  </p>
                 </div>
-                {a.academyId === selectedAcademyId && (
+                {a.parentStudentId === selectedKey && (
                   <Check className="w-5 h-5 text-primary-600 shrink-0" />
                 )}
               </button>
