@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { fetchWeekInputs, getWeekRange } from '../lib/dataFetcher';
 import {
   calculateFiveAxis,
-  calculateTrends,
+  calculateTrendsV2,
   generateHashtags,
   suggestParentActions,
   generateSeasonInsight,
@@ -43,7 +43,9 @@ function gradeToAge(grade: number): number {
 
 export function ChildDataProvider({ children: childrenProp }: { children: ReactNode }) {
   const { currentAcademy } = useAuth();
-  const [weekOffset, setWeekOffset] = useState(0);
+  // 디폴트: 지난 한 주 (W-1). 배치는 일요일에 끝난 한 주를 처리하므로
+  // 부모가 보는 디폴트도 "방금 완결된 한 주"가 되어야 함.
+  const [weekOffset, setWeekOffset] = useState(-1);
   const [currentReport, setCurrentReport] = useState<WeeklyReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(true);
   const [isAIGenerated, setIsAIGenerated] = useState(false);
@@ -125,20 +127,31 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
     };
 
     const loadFallback = async (start: string, end: string, cancelled: boolean) => {
-      const prevWeek = getWeekRange(weekOffset - 1);
+      // [v2] 4주치 데이터 (W, W-1, W-2, W-3) 가져와서 추세 계산
+      const w1 = getWeekRange(weekOffset - 1);
+      const w2 = getWeekRange(weekOffset - 2);
+      const w3 = getWeekRange(weekOffset - 3);
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('fetch timeout 10s')), 10000)
       );
       const fetchAll = Promise.all([
         fetchWeekInputs(currentAcademy.studentId, start, end),
-        fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
+        fetchWeekInputs(currentAcademy.studentId, w1.start, w1.end),
+        fetchWeekInputs(currentAcademy.studentId, w2.start, w2.end),
+        fetchWeekInputs(currentAcademy.studentId, w3.start, w3.end),
       ]);
-      const [thisInputs, prevInputs] = await Promise.race([fetchAll, timeout]) as Awaited<typeof fetchAll>;
+      const [thisInputs, prevInputs, w2Inputs, w3Inputs] = await Promise.race([fetchAll, timeout]) as Awaited<typeof fetchAll>;
       if (cancelled) return;
 
       const inputsWithPrev: WeekInputs = { ...thisInputs, prevWeekScores: prevInputs.scores };
       const stats = calculateFiveAxis(inputsWithPrev, currentAcademy.studentGrade);
-      const trends = calculateTrends(thisInputs.scores, prevInputs.scores);
+      // [v2] 4주 윈도우로 trend 계산
+      const trends = calculateTrendsV2([
+        thisInputs.scores,
+        prevInputs.scores,
+        w2Inputs.scores,
+        w3Inputs.scores,
+      ]);
       const hashtags = generateHashtags(stats, thisInputs);
       const parentActions = suggestParentActions(stats);
       const seasonInsight = generateSeasonInsight(stats, currentAcademy.studentName);
@@ -159,7 +172,8 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
     return () => { cancelled = true; };
   }, [currentAcademy, weekOffset]);
 
-  const canGoNext = weekOffset < 0;
+  // W-1이 최신 리포트. W(진행 중인 주)나 미래 주차는 보여주지 않음.
+  const canGoNext = weekOffset < -1;
   const canGoPrevious = weekOffset > -MAX_PAST_WEEKS;
 
   const goToPreviousWeek = () => { if (canGoPrevious) setWeekOffset(p => p - 1); };
@@ -197,4 +211,4 @@ export function useChildData() {
   const context = useContext(ChildDataContext);
   if (context === undefined) throw new Error('useChildData must be used within a ChildDataProvider');
   return context;
-} 
+}
