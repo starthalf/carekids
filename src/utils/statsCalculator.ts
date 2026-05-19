@@ -32,6 +32,7 @@ export interface ScoreRecord {
   subject?: string;
   score: number;
   maxScore: number;
+  testType?: 'daily' | 'weekly' | 'monthly';   // 가중 평균용 (avgForSubjectWeighted)
 }
 
 export interface WeekInputs {
@@ -312,7 +313,7 @@ function avgForSubjectWeighted(records: ScoreRecord[], subject: string): number 
   let totalWeight = 0;
   let weightedSum = 0;
   filtered.forEach(r => {
-    const w = weights[(r as any).testType || 'daily'] || 1;
+    const w = weights[r.testType || 'daily'] || 1;
     weightedSum += (r.score / r.maxScore) * 100 * w;
     totalWeight += w;
   });
