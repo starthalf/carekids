@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { fetchWeekInputs, getWeekRange } from '../lib/dataFetcher';
 import {
   calculateFiveAxis,
-  calculateTrends,
+  calculateTrendsV2,
   generateHashtags,
   suggestParentActions,
   generateSeasonInsight,
@@ -127,20 +127,31 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
     };
 
     const loadFallback = async (start: string, end: string, cancelled: boolean) => {
-      const prevWeek = getWeekRange(weekOffset - 1);
+      // [v2] 4주치 데이터 (W, W-1, W-2, W-3) 가져와서 추세 계산
+      const w1 = getWeekRange(weekOffset - 1);
+      const w2 = getWeekRange(weekOffset - 2);
+      const w3 = getWeekRange(weekOffset - 3);
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('fetch timeout 10s')), 10000)
       );
       const fetchAll = Promise.all([
         fetchWeekInputs(currentAcademy.studentId, start, end),
-        fetchWeekInputs(currentAcademy.studentId, prevWeek.start, prevWeek.end),
+        fetchWeekInputs(currentAcademy.studentId, w1.start, w1.end),
+        fetchWeekInputs(currentAcademy.studentId, w2.start, w2.end),
+        fetchWeekInputs(currentAcademy.studentId, w3.start, w3.end),
       ]);
-      const [thisInputs, prevInputs] = await Promise.race([fetchAll, timeout]) as Awaited<typeof fetchAll>;
+      const [thisInputs, prevInputs, w2Inputs, w3Inputs] = await Promise.race([fetchAll, timeout]) as Awaited<typeof fetchAll>;
       if (cancelled) return;
 
       const inputsWithPrev: WeekInputs = { ...thisInputs, prevWeekScores: prevInputs.scores };
       const stats = calculateFiveAxis(inputsWithPrev, currentAcademy.studentGrade);
-      const trends = calculateTrends(thisInputs.scores, prevInputs.scores);
+      // [v2] 4주 윈도우로 trend 계산
+      const trends = calculateTrendsV2([
+        thisInputs.scores,
+        prevInputs.scores,
+        w2Inputs.scores,
+        w3Inputs.scores,
+      ]);
       const hashtags = generateHashtags(stats, thisInputs);
       const parentActions = suggestParentActions(stats);
       const seasonInsight = generateSeasonInsight(stats, currentAcademy.studentName);
