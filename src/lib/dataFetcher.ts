@@ -70,7 +70,7 @@ export async function fetchWeekInputs(
       .lte('date', weekEnd),
     supabase
       .from('scores')
-      .select('date, subject_name, score, max_score')
+      .select('date, subject_name, score, max_score, test_type')
       .eq('student_id', studentId)
       .gte('date', weekStart)
       .lte('date', weekEnd),
@@ -95,6 +95,7 @@ export async function fetchWeekInputs(
       subject: s.subject_name,
       score: s.score,
       maxScore: s.max_score,
+      testType: s.test_type,
     })),
   };
 }
