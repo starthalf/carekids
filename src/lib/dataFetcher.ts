@@ -1,25 +1,25 @@
 import { supabase } from '../lib/supabase';
 import type { WeekInputs } from '../utils/statsCalculator';
 
+// [중요] 주차 계산은 KST(Asia/Seoul) 기준으로 강제.
+// edge function generate-weekly-insights와 동일한 로직.
+// 부모가 해외 출장/여행 중이라도 weekly_insights 캐시의 week_start와 일치해야 함.
 export function getWeekRange(weekOffset: number = 0): { start: string; end: string; label: string } {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
+  // 현재 시각 → KST (+9h). 이후엔 UTC 메서드로 읽어야 KST 값이 나옴.
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+
+  const dayOfWeek = kstNow.getUTCDay();              // 일=0, 월=1, ..., 토=6
   const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
 
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + daysToMonday + weekOffset * 7);
-  monday.setHours(0, 0, 0, 0);
+  const monday = new Date(kstNow);
+  monday.setUTCDate(kstNow.getUTCDate() + daysToMonday + weekOffset * 7);
+  monday.setUTCHours(0, 0, 0, 0);
 
   const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
 
-  // 로컬 시간 기준 YYYY-MM-DD 포맷 (toISOString 사용 X)
-  const fmt = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
 
   let label = '';
   if (weekOffset === 0) label = '이번 주';
