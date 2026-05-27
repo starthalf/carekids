@@ -57,7 +57,7 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
         name: currentAcademy.studentName,
         grade: gradeToLabel(currentAcademy.studentGrade),
         age: gradeToAge(currentAcademy.studentGrade),
-        avatar: currentAcademy.studentAvatar || 'https://api.dicebear.com/7.x/thumbs/svg?seed=child',
+        avatar: currentAcademy.studentAvatar || '',
       };
     }
     return {
