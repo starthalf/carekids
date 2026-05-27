@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { mapParent } from '../lib/mappers';
+import { getStudentPhotoUrls } from '../lib/studentPhoto';
 import type { Parent } from '../types';
 
 // ============================================================
@@ -218,6 +219,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // 최종 합치기: 본인 자녀 먼저, 학원장 미리보기 학생 뒤에
       const combined = [...parentAcademies, ...ownerAcademies];
+
+      // studentAvatar가 storage 경로면 서명 URL로 변환 (비공개 버킷)
+      try {
+        const signedUrls = await getStudentPhotoUrls(combined.map(c => c.studentAvatar));
+        combined.forEach((c, i) => {
+          c.studentAvatar = signedUrls[i] || '';
+        });
+      } catch (e) {
+        console.warn('[LOAD] photo sign failed', e);
+      }
+
       setMyAcademies(combined);
 
       // selectedKey 복원: 이전 선택이 여전히 유효하면 유지, 아니면 첫 항목
