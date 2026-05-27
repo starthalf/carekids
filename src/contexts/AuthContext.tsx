@@ -217,6 +217,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // 최종 합치기: 본인 자녀 먼저, 학원장 미리보기 학생 뒤에
+      // studentAvatar는 storage 경로(또는 외부 URL) 그대로 둔다.
+      // 표시 시점에 StudentPhoto/ChildAvatar가 신선한 서명 URL을 발급한다.
       const combined = [...parentAcademies, ...ownerAcademies];
       setMyAcademies(combined);
 
