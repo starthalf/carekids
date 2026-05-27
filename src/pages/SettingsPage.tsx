@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { User, Bell, Shield, HelpCircle, ChevronRight, LogOut, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import StudentPhoto from '../components/avatar/StudentPhoto';
 
 const menuItems = [
   { icon: Bell, label: '알림 설정', description: '푸시 알림 및 리마인더' },
@@ -44,10 +45,11 @@ export default function SettingsPage() {
                     : 'border-gray-100 hover:border-gray-200'
                 }`}
               >
-                <img
-                  src={a.studentAvatar || `https://api.dicebear.com/7.x/thumbs/svg?seed=${a.studentId}`}
+                <StudentPhoto
+                  avatar={a.studentAvatar}
+                  seed={a.studentId}
                   alt={a.studentName}
-                  className="w-12 h-12 rounded-full bg-gray-100 ring-2 ring-offset-2 ring-primary-100"
+                  className="w-12 h-12 rounded-full bg-gray-100 ring-2 ring-offset-2 ring-primary-100 object-cover"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-800 text-sm truncate">{a.studentName}</p>
