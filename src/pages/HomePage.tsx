@@ -42,8 +42,6 @@ export default function HomePage() {
     );
   }
 
-  // 이번 주를 보고 있을 때만 "리듬"과 "성장 비교" 표시
-  const isCurrentWeek = currentWeekIndex === 0;
   const studentGrade = currentAcademy?.studentGrade ?? 0;
 
   return (
@@ -160,22 +158,18 @@ export default function HomePage() {
             weekEnd={currentReport.endDate}
           />
 
-          {/* 4. 요일별 리듬 (이번 주 볼 때만, 최근 4주 누적) */}
-          {isCurrentWeek && (
-            <WeeklyRhythmCard
-              studentId={currentChild.id}
-              childName={currentChild.name}
-            />
-          )}
+          {/* 4. 요일별 리듬 (최근 4주 누적) */}
+          <WeeklyRhythmCard
+            studentId={currentChild.id}
+            childName={currentChild.name}
+          />
 
-          {/* 5. 3개월 전과 비교 (이번 주 볼 때만) */}
-          {isCurrentWeek && (
-            <GrowthCompareCard
-              studentId={currentChild.id}
-              studentGrade={studentGrade}
-              currentStats={currentReport.stats}
-            />
-          )}
+          {/* 5. 3개월 전과 비교 */}
+          <GrowthCompareCard
+            studentId={currentChild.id}
+            studentGrade={studentGrade}
+            currentStats={currentReport.stats}
+          />
 
           {/* 6. 부모 액션 */}
           {currentReport.insights.parentActions.length > 0 && (
