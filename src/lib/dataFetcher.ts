@@ -1,23 +1,18 @@
 import { supabase } from '../lib/supabase';
 import type { WeekInputs } from '../utils/statsCalculator';
 
-// [중요] 주차 계산은 KST(Asia/Seoul) 기준으로 강제.
-// edge function generate-weekly-insights와 동일한 로직.
-// 부모가 해외 출장/여행 중이라도 weekly_insights 캐시의 week_start와 일치해야 함.
+// ISO 주차 → 시작/끝 날짜
 export function getWeekRange(weekOffset: number = 0): { start: string; end: string; label: string } {
-  // 현재 시각 → KST (+9h). 이후엔 UTC 메서드로 읽어야 KST 값이 나옴.
-  const now = new Date();
-  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-
-  const dayOfWeek = kstNow.getUTCDay();              // 일=0, 월=1, ..., 토=6
+  const today = new Date();
+  const dayOfWeek = today.getDay();
   const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-
-  const monday = new Date(kstNow);
-  monday.setUTCDate(kstNow.getUTCDate() + daysToMonday + weekOffset * 7);
-  monday.setUTCHours(0, 0, 0, 0);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + daysToMonday + weekOffset * 7);
+  monday.setHours(0, 0, 0, 0);
 
   const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
 
   const fmt = (d: Date) => d.toISOString().split('T')[0];
 
@@ -31,7 +26,7 @@ export function getWeekRange(weekOffset: number = 0): { start: string; end: stri
   return { start: fmt(monday), end: fmt(sunday), label };
 }
 
-// 주차 표시용 (1월 26일 - 2월 1일)
+// 주차 표시용
 export function formatWeekRange(start: string, end: string): string {
   const s = new Date(start);
   const e = new Date(end);
@@ -98,4 +93,114 @@ export async function fetchWeekInputs(
       testType: s.test_type,
     })),
   };
+}
+
+// ============================================================
+// 추가: 학생 태그 기록 (이번 주 빛난 순간용)
+// ============================================================
+export interface WeekTag {
+  date: string;
+  tag: string;
+}
+
+export async function fetchStudentTags(
+  studentId: string,
+  weekStart: string,
+  weekEnd: string
+): Promise<WeekTag[]> {
+  const { data, error } = await supabase
+    .from('student_tags')
+    .select('date, tag')
+    .eq('student_id', studentId)
+    .gte('date', weekStart)
+    .lte('date', weekEnd)
+    .order('date', { ascending: false });
+
+  if (error) {
+    console.error('[fetchStudentTags]', error);
+    return [];
+  }
+  return (data || []) as WeekTag[];
+}
+
+// ============================================================
+// 추가: 학생의 다가오는 수업 일정 (앞으로 7일)
+// schedule_slots 구조: [{ day: 'mon', time: '14:00' }, ...]
+// ============================================================
+export interface UpcomingClass {
+  classId: string;
+  className: string;
+  subjectName?: string;
+  day: string;       // mon, tue, ...
+  time: string;      // "14:00"
+  date: string;      // YYYY-MM-DD
+}
+
+export async function fetchUpcomingClasses(studentId: string): Promise<UpcomingClass[]> {
+  const { data, error } = await supabase
+    .from('class_enrollments')
+    .select(`
+      class_id,
+      classes (
+        id,
+        name,
+        schedule_slots,
+        subjects ( name )
+      )
+    `)
+    .eq('student_id', studentId);
+
+  if (error) {
+    console.error('[fetchUpcomingClasses]', error);
+    return [];
+  }
+  if (!data) return [];
+
+  const dayMap: Record<string, number> = {
+    sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+  };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayDow = today.getDay();
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+
+  const list: UpcomingClass[] = [];
+  data.forEach((row: any) => {
+    const cls = row.classes;
+    if (!cls) return;
+    const slots = cls.schedule_slots || [];
+    slots.forEach((slot: any) => {
+      const targetDow = dayMap[slot.day];
+      if (targetDow === undefined) return;
+
+      // 오늘 같은 요일이면 시간 확인해서 이미 지났으면 다음 주로
+      let daysAhead = (targetDow - todayDow + 7) % 7;
+      if (daysAhead === 0) {
+        const [hh, mm] = (slot.time || '00:00').split(':').map(Number);
+        const slotMinutes = (hh || 0) * 60 + (mm || 0);
+        if (slotMinutes <= nowMinutes) daysAhead = 7;
+      }
+
+      const nextDate = new Date(today);
+      nextDate.setDate(today.getDate() + daysAhead);
+
+      list.push({
+        classId: cls.id,
+        className: cls.name,
+        subjectName: cls.subjects?.name,
+        day: slot.day,
+        time: slot.time || '',
+        date: nextDate.toISOString().split('T')[0],
+      });
+    });
+  });
+
+  // 날짜+시간 순 정렬, 상위 4개
+  return list
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.time.localeCompare(b.time);
+    })
+    .slice(0, 4);
 }
