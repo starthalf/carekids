@@ -1,18 +1,23 @@
 import { supabase } from '../lib/supabase';
 import type { WeekInputs } from '../utils/statsCalculator';
 
-// ISO 주차 → 시작/끝 날짜
+// [중요] 주차 계산은 KST(Asia/Seoul) 기준으로 강제.
+// edge function generate-weekly-insights와 동일한 로직.
+// 부모가 해외 출장/여행 중이라도 weekly_insights 캐시의 week_start와 일치해야 함.
 export function getWeekRange(weekOffset: number = 0): { start: string; end: string; label: string } {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
+  // 현재 시각 → KST (+9h). 이후엔 UTC 메서드로 읽어야 KST 값이 나옴.
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+
+  const dayOfWeek = kstNow.getUTCDay();              // 일=0, 월=1, ..., 토=6
   const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + daysToMonday + weekOffset * 7);
-  monday.setHours(0, 0, 0, 0);
+
+  const monday = new Date(kstNow);
+  monday.setUTCDate(kstNow.getUTCDate() + daysToMonday + weekOffset * 7);
+  monday.setUTCHours(0, 0, 0, 0);
 
   const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
 
   const fmt = (d: Date) => d.toISOString().split('T')[0];
 
@@ -26,7 +31,7 @@ export function getWeekRange(weekOffset: number = 0): { start: string; end: stri
   return { start: fmt(monday), end: fmt(sunday), label };
 }
 
-// 주차 표시용
+// 주차 표시용 (1월 26일 - 2월 1일)
 export function formatWeekRange(start: string, end: string): string {
   const s = new Date(start);
   const e = new Date(end);
@@ -93,130 +98,4 @@ export async function fetchWeekInputs(
       testType: s.test_type,
     })),
   };
-}
-
-// ============================================================
-// 학생 태그 기록 (이번 주 빛난 순간용)
-// ============================================================
-export interface WeekTag {
-  date: string;
-  tag: string;
-}
-
-export async function fetchStudentTags(
-  studentId: string,
-  weekStart: string,
-  weekEnd: string
-): Promise<WeekTag[]> {
-  const { data, error } = await supabase
-    .from('student_tags')
-    .select('date, tag')
-    .eq('student_id', studentId)
-    .gte('date', weekStart)
-    .lte('date', weekEnd)
-    .order('date', { ascending: false });
-
-  if (error) {
-    console.error('[fetchStudentTags]', error);
-    return [];
-  }
-  return (data || []) as WeekTag[];
-}
-
-// ============================================================
-// 요일별 리듬 - 최근 N주치 데이터로 요일별 컨디션 산출
-// 출석(+1) + 숙제 high(+1) + 긍정 태그(×2) 로 점수화
-// ============================================================
-export interface DayRhythm {
-  day: string;          // mon, tue, ...
-  score: number;        // 누적 점수
-  attendance: number;   // 출석 횟수 (참고용)
-  highHomework: number; // 숙제 high 횟수
-  positiveTags: number; // 긍정 태그 횟수
-}
-
-const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-
-export async function fetchWeekRhythm(
-  studentId: string,
-  weeksBack: number = 4
-): Promise<DayRhythm[]> {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const thisMon = new Date(today);
-  thisMon.setDate(today.getDate() + daysToMonday);
-  thisMon.setHours(0, 0, 0, 0);
-
-  // N주 전 월요일
-  const start = new Date(thisMon);
-  start.setDate(thisMon.getDate() - 7 * (weeksBack - 1));
-
-  // 이번 주 일요일 (오늘 포함)
-  const end = new Date(thisMon);
-  end.setDate(thisMon.getDate() + 6);
-
-  const fmt = (d: Date) => d.toISOString().split('T')[0];
-  const startStr = fmt(start);
-  const endStr = fmt(end);
-
-  const [attRes, hwRes, tagRes] = await Promise.all([
-    supabase
-      .from('attendance')
-      .select('date, status')
-      .eq('student_id', studentId)
-      .gte('date', startStr)
-      .lte('date', endStr),
-    supabase
-      .from('homework')
-      .select('date, completed, quality')
-      .eq('student_id', studentId)
-      .gte('date', startStr)
-      .lte('date', endStr),
-    supabase
-      .from('student_tags')
-      .select('date, tag')
-      .eq('student_id', studentId)
-      .gte('date', startStr)
-      .lte('date', endStr),
-  ]);
-
-  // 요일별 초기화 (mon~fri만 의미 있음, sat/sun은 보통 0)
-  const rhythm: Record<string, DayRhythm> = {};
-  DAY_KEYS.forEach(d => {
-    rhythm[d] = { day: d, score: 0, attendance: 0, highHomework: 0, positiveTags: 0 };
-  });
-
-  const getDayKey = (dateStr: string): string => {
-    const d = new Date(dateStr + 'T00:00:00');
-    return DAY_KEYS[d.getDay()];
-  };
-
-  // 출석 +1
-  (attRes.data || []).forEach((r: any) => {
-    const k = getDayKey(r.date);
-    if (r.status === 'present') {
-      rhythm[k].attendance += 1;
-      rhythm[k].score += 1;
-    }
-  });
-
-  // 숙제 high +1
-  (hwRes.data || []).forEach((r: any) => {
-    if (r.completed && r.quality === 'high') {
-      const k = getDayKey(r.date);
-      rhythm[k].highHomework += 1;
-      rhythm[k].score += 1;
-    }
-  });
-
-  // 긍정 태그 ×2 (태그는 다 긍정이므로 그대로)
-  (tagRes.data || []).forEach((r: any) => {
-    const k = getDayKey(r.date);
-    rhythm[k].positiveTags += 1;
-    rhythm[k].score += 2;
-  });
-
-  // 평일만 반환 (월~금)
-  return ['mon', 'tue', 'wed', 'thu', 'fri'].map(d => rhythm[d]);
 }
