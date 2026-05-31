@@ -33,12 +33,11 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
 
   if (loading) return null;
 
-  // 전체 평일 (월~금) 데이터 - 수업 없는 요일도 포함
+  // 전체 평일 (월~금) - 수업 없는 요일도 포함
   const allDays = DAY_ORDER.map(
     day => rhythm.find(r => r.day === day) || { day, score: 0, attendance: 0, highHomework: 0, positiveTags: 0 }
   );
 
-  // 수업 있던 요일만 (best 판단용)
   const activeDays = allDays.filter(d => d.attendance > 0);
   if (activeDays.length === 0) return null;
 
@@ -49,7 +48,7 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-slideUp">
-      {/* 헤더 + 기간 뱃지 */}
+      {/* 헤더 */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-violet-50 flex items-center justify-center">
@@ -63,64 +62,58 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
       </div>
       <p className="text-xs text-gray-400 ml-10 mb-5">요일별 컨디션 패턴</p>
 
-      {/* 가로 막대 (월~금) */}
+      {/* 가로 막대 */}
       <div className="flex items-end justify-between gap-2 px-1">
         {allDays.map(r => {
           const hasClass = r.attendance > 0;
           const isBest = hasClass && r.day === best.day && showBestMention;
           const pct = hasClass ? Math.round((r.score / maxScore) * 100) : 0;
-          const barHeightPx = hasClass ? Math.max((pct / 100) * 80, 8) : 0;
+          const barHeightPx = hasClass ? Math.max((pct / 100) * 80, 12) : 6;
 
           return (
-            <div key={r.day} className="flex-1 flex flex-col items-center gap-1.5">
-              {/* 퍼센트 */}
-              <span
-                className={`text-[10px] font-semibold h-4 ${
-                  !hasClass
-                    ? 'text-gray-300'
-                    : isBest
-                      ? 'text-violet-600'
-                      : 'text-gray-500'
-                }`}
-              >
-                {hasClass ? `${pct}%` : '-'}
-              </span>
-
-              {/* 막대 영역 (고정 높이 80px) */}
-              <div className="w-full h-20 flex items-end justify-center">
-                {hasClass ? (
-                  <div
-                    className={`w-full rounded-md transition-all ${
-                      isBest
-                        ? 'bg-gradient-to-t from-violet-500 to-violet-400'
-                        : 'bg-gradient-to-t from-violet-300 to-violet-200'
-                    }`}
-                    style={{ height: `${barHeightPx}px` }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-full border-t-2 border-dashed border-gray-200" />
-                  </div>
-                )}
+            <div key={r.day} className="flex-1 flex flex-col items-center">
+              {/* 퍼센트 (모든 칸 같은 높이 차지) */}
+              <div className="h-4 flex items-center">
+                <span
+                  className={`text-[10px] font-semibold ${
+                    !hasClass
+                      ? 'text-transparent'
+                      : isBest
+                        ? 'text-violet-600'
+                        : 'text-gray-500'
+                  }`}
+                >
+                  {hasClass ? `${pct}%` : '·'}
+                </span>
               </div>
 
-              {/* 요일 라벨 */}
+              {/* 막대 영역 (고정 80px, 항상 바닥 정렬) */}
+              <div className="w-full h-20 flex items-end justify-center mt-1.5">
+                <div
+                  className={`w-full rounded-md transition-all ${
+                    !hasClass
+                      ? 'bg-gray-100'
+                      : isBest
+                        ? 'bg-gradient-to-t from-violet-500 to-violet-400'
+                        : 'bg-gradient-to-t from-violet-300 to-violet-200'
+                  }`}
+                  style={{ height: `${barHeightPx}px` }}
+                />
+              </div>
+
+              {/* 요일 라벨 (모든 칸 동일 라인) */}
               <span
-                className={`text-xs font-medium ${
+                className={`text-xs font-medium mt-1.5 ${
                   !hasClass
                     ? 'text-gray-300'
                     : isBest
                       ? 'text-violet-600'
-                      : 'text-gray-600'
+                      : 'text-gray-700'
                 }`}
               >
                 {DAY_KOR[r.day]}
+                {!hasClass && <span className="ml-0.5 text-[10px]">·휴</span>}
               </span>
-
-              {/* 수업 없음 표기 */}
-              {!hasClass && (
-                <span className="text-[9px] text-gray-300 leading-none">수업없음</span>
-              )}
             </div>
           );
         })}
