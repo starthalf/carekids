@@ -12,7 +12,7 @@ const DAY_KOR: Record<string, string> = {
 };
 
 const WEEKS = 4;
-const MAX_DOTS = WEEKS; // 한 요일당 최대 4점 (4주)
+const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri'];
 
 export default function WeeklyRhythmCard({ studentId, childName }: Props) {
   const [rhythm, setRhythm] = useState<DayRhythm[]>([]);
@@ -33,14 +33,22 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
 
   if (loading) return null;
 
-  // 수업이 있던 요일만 (출석 기록이 1번이라도 있는 요일)
+  // 수업이 있던 요일만 (출석 기록 있는 요일)
   const activeDays = rhythm.filter(r => r.attendance > 0);
   if (activeDays.length === 0) return null;
 
-  // 정렬: 점수 높은 요일이 위로
+  // 요일 순서대로 정렬 (월→금)
+  const ordered = [...activeDays].sort(
+    (a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day)
+  );
+
+  // best 찾기 (점수 기준)
   const sorted = [...activeDays].sort((a, b) => b.score - a.score);
   const best = sorted[0];
   const showBestMention = sorted.length >= 2 && best.score - sorted[1].score >= 2;
+
+  // 각 요일의 컨디션 % = score / max score (max 100%)
+  // 가능한 최대 점수: 출석4 + 숙제high4 + 태그매주많이 -> 그 학생이 받은 max를 기준으로 정규화
   const maxScore = Math.max(...activeDays.map(d => d.score), 1);
 
   return (
@@ -53,14 +61,13 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
       </div>
       <p className="text-xs text-gray-400 ml-10 mb-4">최근 4주 수업일별 컨디션</p>
 
+      {/* 가로 막대 + % */}
       <div className="space-y-2.5">
-        {sorted.map(r => {
+        {ordered.map(r => {
           const isBest = r.day === best.day && showBestMention;
-          const dotCount = Math.min(r.attendance, MAX_DOTS);
-          const fillRatio = r.score / maxScore;
-
+          const pct = Math.round((r.score / maxScore) * 100);
           return (
-            <div key={r.day} className="flex items-center gap-4">
+            <div key={r.day} className="flex items-center gap-3">
               <span
                 className={`text-sm font-medium w-6 shrink-0 ${
                   isBest ? 'text-violet-600' : 'text-gray-600'
@@ -68,28 +75,21 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
               >
                 {DAY_KOR[r.day]}
               </span>
-              <div className="flex gap-1.5 flex-1">
-                {Array.from({ length: MAX_DOTS }).map((_, i) => {
-                  const filled = i < dotCount;
-                  if (!filled) {
-                    return <span key={i} className="w-3 h-3 rounded-full bg-gray-100" />;
-                  }
-                  return (
-                    <span
-                      key={i}
-                      className={`w-3 h-3 rounded-full ${
-                        isBest
-                          ? 'bg-violet-500'
-                          : fillRatio >= 0.8
-                            ? 'bg-violet-400'
-                            : fillRatio >= 0.5
-                              ? 'bg-violet-300'
-                              : 'bg-violet-200'
-                      }`}
-                    />
-                  );
-                })}
+              <div className="flex-1 relative h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`absolute top-0 left-0 h-full rounded-full transition-all ${
+                    isBest ? 'bg-violet-500' : 'bg-violet-300'
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
               </div>
+              <span
+                className={`text-xs font-semibold w-10 text-right ${
+                  isBest ? 'text-violet-600' : 'text-gray-500'
+                }`}
+              >
+                {pct}%
+              </span>
             </div>
           );
         })}
