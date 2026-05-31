@@ -9,8 +9,8 @@ import PentagonChart from '../components/stats/PentagonChart';
 import SeasonInsightCard from '../components/insight/SeasonInsightCard';
 import ParentActionCard from '../components/insight/ParentActionCard';
 import WeeklyHighlightsCard from '../components/insight/WeeklyHighlightsCard';
+import WeeklyRhythmCard from '../components/insight/WeeklyRhythmCard';
 import GrowthCompareCard from '../components/insight/GrowthCompareCard';
-import UpcomingScheduleCard from '../components/insight/UpcomingScheduleCard';
 
 export default function HomePage() {
   const {
@@ -42,7 +42,7 @@ export default function HomePage() {
     );
   }
 
-  // 이번 주를 보고 있을 때만 "성장 비교"와 "다가오는 수업" 표시
+  // 이번 주를 보고 있을 때만 "리듬"과 "성장 비교" 표시
   const isCurrentWeek = currentWeekIndex === 0;
   const studentGrade = currentAcademy?.studentGrade ?? 0;
 
@@ -153,14 +153,22 @@ export default function HomePage() {
           {/* 2. 시즌 인사이트 */}
           <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
 
-          {/* 3. 🆕 이번 주 빛난 순간 */}
+          {/* 3. 이번 주 빛난 순간 */}
           <WeeklyHighlightsCard
             studentId={currentChild.id}
             weekStart={currentReport.startDate}
             weekEnd={currentReport.endDate}
           />
 
-          {/* 4. 🆕 3개월 전과 비교 (이번 주 볼 때만) */}
+          {/* 4. 요일별 리듬 (이번 주 볼 때만, 최근 4주 누적) */}
+          {isCurrentWeek && (
+            <WeeklyRhythmCard
+              studentId={currentChild.id}
+              childName={currentChild.name}
+            />
+          )}
+
+          {/* 5. 3개월 전과 비교 (이번 주 볼 때만) */}
           {isCurrentWeek && (
             <GrowthCompareCard
               studentId={currentChild.id}
@@ -169,22 +177,17 @@ export default function HomePage() {
             />
           )}
 
-          {/* 5. 부모 액션 */}
+          {/* 6. 부모 액션 */}
           {currentReport.insights.parentActions.length > 0 && (
             <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
           )}
 
-          {/* 6. 주간 트렌드 */}
+          {/* 7. 주간 트렌드 */}
           {currentReport.trends.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
               <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-tighter">Weekly Trend</h3>
               <TrendCard trends={currentReport.trends} />
             </div>
-          )}
-
-          {/* 7. 🆕 다가오는 수업 (이번 주 볼 때만) */}
-          {isCurrentWeek && (
-            <UpcomingScheduleCard studentId={currentChild.id} />
           )}
         </>
       )}

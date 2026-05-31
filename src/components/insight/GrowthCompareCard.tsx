@@ -31,7 +31,6 @@ export default function GrowthCompareCard({ studentId, studentGrade, currentStat
     fetchWeekInputs(studentId, past.start, past.end)
       .then(inputs => {
         if (cancelled) return;
-        // 데이터가 거의 없으면 baseline(60)이 떠서 의미 없는 비교가 됨
         const hasRealData =
           inputs.attendance.length + inputs.homework.length + inputs.scores.length > 0;
         if (!hasRealData) {
@@ -58,7 +57,6 @@ export default function GrowthCompareCard({ studentId, studentGrade, currentStat
     diff: currentStats[key] - pastStats[key],
   }));
 
-  // 의미 있는 변화 (절대값 3 이상) 상위 3개
   const meaningful = diffs
     .filter(d => Math.abs(d.diff) >= 3)
     .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))

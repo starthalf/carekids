@@ -96,7 +96,7 @@ export async function fetchWeekInputs(
 }
 
 // ============================================================
-// 추가: 학생 태그 기록 (이번 주 빛난 순간용)
+// 학생 태그 기록 (이번 주 빛난 순간용)
 // ============================================================
 export interface WeekTag {
   date: string;
@@ -124,83 +124,99 @@ export async function fetchStudentTags(
 }
 
 // ============================================================
-// 추가: 학생의 다가오는 수업 일정 (앞으로 7일)
-// schedule_slots 구조: [{ day: 'mon', time: '14:00' }, ...]
+// 요일별 리듬 - 최근 N주치 데이터로 요일별 컨디션 산출
+// 출석(+1) + 숙제 high(+1) + 긍정 태그(×2) 로 점수화
 // ============================================================
-export interface UpcomingClass {
-  classId: string;
-  className: string;
-  subjectName?: string;
-  day: string;       // mon, tue, ...
-  time: string;      // "14:00"
-  date: string;      // YYYY-MM-DD
+export interface DayRhythm {
+  day: string;          // mon, tue, ...
+  score: number;        // 누적 점수
+  attendance: number;   // 출석 횟수 (참고용)
+  highHomework: number; // 숙제 high 횟수
+  positiveTags: number; // 긍정 태그 횟수
 }
 
-export async function fetchUpcomingClasses(studentId: string): Promise<UpcomingClass[]> {
-  const { data, error } = await supabase
-    .from('class_enrollments')
-    .select(`
-      class_id,
-      classes (
-        id,
-        name,
-        schedule_slots,
-        subjects ( name )
-      )
-    `)
-    .eq('student_id', studentId);
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
-  if (error) {
-    console.error('[fetchUpcomingClasses]', error);
-    return [];
-  }
-  if (!data) return [];
-
-  const dayMap: Record<string, number> = {
-    sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
-  };
-
+export async function fetchWeekRhythm(
+  studentId: string,
+  weeksBack: number = 4
+): Promise<DayRhythm[]> {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayDow = today.getDay();
-  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const dayOfWeek = today.getDay();
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const thisMon = new Date(today);
+  thisMon.setDate(today.getDate() + daysToMonday);
+  thisMon.setHours(0, 0, 0, 0);
 
-  const list: UpcomingClass[] = [];
-  data.forEach((row: any) => {
-    const cls = row.classes;
-    if (!cls) return;
-    const slots = cls.schedule_slots || [];
-    slots.forEach((slot: any) => {
-      const targetDow = dayMap[slot.day];
-      if (targetDow === undefined) return;
+  // N주 전 월요일
+  const start = new Date(thisMon);
+  start.setDate(thisMon.getDate() - 7 * (weeksBack - 1));
 
-      // 오늘 같은 요일이면 시간 확인해서 이미 지났으면 다음 주로
-      let daysAhead = (targetDow - todayDow + 7) % 7;
-      if (daysAhead === 0) {
-        const [hh, mm] = (slot.time || '00:00').split(':').map(Number);
-        const slotMinutes = (hh || 0) * 60 + (mm || 0);
-        if (slotMinutes <= nowMinutes) daysAhead = 7;
-      }
+  // 이번 주 일요일 (오늘 포함)
+  const end = new Date(thisMon);
+  end.setDate(thisMon.getDate() + 6);
 
-      const nextDate = new Date(today);
-      nextDate.setDate(today.getDate() + daysAhead);
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  const startStr = fmt(start);
+  const endStr = fmt(end);
 
-      list.push({
-        classId: cls.id,
-        className: cls.name,
-        subjectName: cls.subjects?.name,
-        day: slot.day,
-        time: slot.time || '',
-        date: nextDate.toISOString().split('T')[0],
-      });
-    });
+  const [attRes, hwRes, tagRes] = await Promise.all([
+    supabase
+      .from('attendance')
+      .select('date, status')
+      .eq('student_id', studentId)
+      .gte('date', startStr)
+      .lte('date', endStr),
+    supabase
+      .from('homework')
+      .select('date, completed, quality')
+      .eq('student_id', studentId)
+      .gte('date', startStr)
+      .lte('date', endStr),
+    supabase
+      .from('student_tags')
+      .select('date, tag')
+      .eq('student_id', studentId)
+      .gte('date', startStr)
+      .lte('date', endStr),
+  ]);
+
+  // 요일별 초기화 (mon~fri만 의미 있음, sat/sun은 보통 0)
+  const rhythm: Record<string, DayRhythm> = {};
+  DAY_KEYS.forEach(d => {
+    rhythm[d] = { day: d, score: 0, attendance: 0, highHomework: 0, positiveTags: 0 };
   });
 
-  // 날짜+시간 순 정렬, 상위 4개
-  return list
-    .sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return a.time.localeCompare(b.time);
-    })
-    .slice(0, 4);
+  const getDayKey = (dateStr: string): string => {
+    const d = new Date(dateStr + 'T00:00:00');
+    return DAY_KEYS[d.getDay()];
+  };
+
+  // 출석 +1
+  (attRes.data || []).forEach((r: any) => {
+    const k = getDayKey(r.date);
+    if (r.status === 'present') {
+      rhythm[k].attendance += 1;
+      rhythm[k].score += 1;
+    }
+  });
+
+  // 숙제 high +1
+  (hwRes.data || []).forEach((r: any) => {
+    if (r.completed && r.quality === 'high') {
+      const k = getDayKey(r.date);
+      rhythm[k].highHomework += 1;
+      rhythm[k].score += 1;
+    }
+  });
+
+  // 긍정 태그 ×2 (태그는 다 긍정이므로 그대로)
+  (tagRes.data || []).forEach((r: any) => {
+    const k = getDayKey(r.date);
+    rhythm[k].positiveTags += 1;
+    rhythm[k].score += 2;
+  });
+
+  // 평일만 반환 (월~금)
+  return ['mon', 'tue', 'wed', 'thu', 'fri'].map(d => rhythm[d]);
 }
