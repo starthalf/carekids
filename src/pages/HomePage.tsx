@@ -24,7 +24,7 @@ export default function HomePage() {
     canGoPrevious,
     academyName,
   } = useChildData();
-  const { myAcademies, selectedAcademyId, selectAcademy, currentAcademy } = useAuth();
+  const { myAcademies, selectedKey, selectAcademy, currentAcademy } = useAuth();
 
   const [showSelector, setShowSelector] = useState(false);
   const hasMultiple = myAcademies.length > 1;
@@ -67,18 +67,18 @@ export default function HomePage() {
                 <button
                   key={a.parentStudentId}
                   onClick={() => {
-                    selectAcademy(a.academyId);
+                    selectAcademy(a.parentStudentId);
                     setShowSelector(false);
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-left ${
-                    a.academyId === selectedAcademyId ? 'bg-primary-50' : 'hover:bg-gray-50'
+                    a.parentStudentId === selectedKey ? 'bg-primary-50' : 'hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{a.academyName}</p>
                     <p className="text-xs text-gray-500 truncate">{a.studentName}</p>
                   </div>
-                  {a.academyId === selectedAcademyId && <Check size={16} className="text-primary-600" />}
+                  {a.parentStudentId === selectedKey && <Check size={16} className="text-primary-600" />}
                 </button>
               ))}
             </div>
@@ -158,7 +158,7 @@ export default function HomePage() {
             weekEnd={currentReport.endDate}
           />
 
-          {/* 4. 요일별 리듬 (최근 4주 누적) */}
+          {/* 4. 요일별 리듬 */}
           <WeeklyRhythmCard
             studentId={currentChild.id}
             childName={currentChild.name}
