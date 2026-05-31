@@ -11,6 +11,9 @@ const DAY_KOR: Record<string, string> = {
   mon: '월', tue: '화', wed: '수', thu: '목', fri: '금',
 };
 
+const WEEKS = 4;
+const MAX_DOTS = WEEKS; // 한 요일당 최대 4점 (4주)
+
 export default function WeeklyRhythmCard({ studentId, childName }: Props) {
   const [rhythm, setRhythm] = useState<DayRhythm[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,7 +21,7 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchWeekRhythm(studentId, 4) // 최근 4주
+    fetchWeekRhythm(studentId, WEEKS)
       .then(data => {
         if (!cancelled) setRhythm(data);
       })
@@ -30,16 +33,15 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
 
   if (loading) return null;
 
-  const totalScore = rhythm.reduce((sum, r) => sum + r.score, 0);
-  if (totalScore === 0) return null; // 데이터 전혀 없으면 숨김
+  // 수업이 있던 요일만 (출석 기록이 1번이라도 있는 요일)
+  const activeDays = rhythm.filter(r => r.attendance > 0);
+  if (activeDays.length === 0) return null;
 
-  const maxScore = Math.max(...rhythm.map(r => r.score), 1);
-  const sorted = [...rhythm].sort((a, b) => b.score - a.score);
+  // 정렬: 점수 높은 요일이 위로
+  const sorted = [...activeDays].sort((a, b) => b.score - a.score);
   const best = sorted[0];
-  const worst = sorted[sorted.length - 1];
-
-  // 베스트와 워스트 차이가 의미있을 때만 인사이트 멘트
-  const showInsight = best.score > 0 && best.score - worst.score >= 2;
+  const showBestMention = sorted.length >= 2 && best.score - sorted[1].score >= 2;
+  const maxScore = Math.max(...activeDays.map(d => d.score), 1);
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-slideUp">
@@ -49,37 +51,51 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
         </div>
         <h3 className="font-semibold text-gray-800">{childName}의 리듬</h3>
       </div>
-      <p className="text-xs text-gray-400 ml-10 mb-4">최근 4주 요일별 컨디션</p>
+      <p className="text-xs text-gray-400 ml-10 mb-4">최근 4주 수업일별 컨디션</p>
 
-      {/* 막대 그래프 */}
-      <div className="flex items-end justify-between gap-2 h-28 px-2">
-        {rhythm.map(r => {
-          const heightPct = (r.score / maxScore) * 100;
-          const isBest = r.day === best.day && r.score > 0;
+      <div className="space-y-2.5">
+        {sorted.map(r => {
+          const isBest = r.day === best.day && showBestMention;
+          const dotCount = Math.min(r.attendance, MAX_DOTS);
+          const fillRatio = r.score / maxScore;
+
           return (
-            <div key={r.day} className="flex-1 flex flex-col items-center gap-1.5 h-full">
-              <div className="flex-1 w-full flex items-end">
-                <div
-                  className={`w-full rounded-t-md transition-all ${
-                    isBest
-                      ? 'bg-gradient-to-t from-violet-500 to-violet-400'
-                      : r.score > 0
-                        ? 'bg-gradient-to-t from-violet-200 to-violet-100'
-                        : 'bg-gray-100'
-                  }`}
-                  style={{ height: `${Math.max(heightPct, 4)}%` }}
-                />
-              </div>
-              <span className={`text-xs font-medium ${isBest ? 'text-violet-600' : 'text-gray-500'}`}>
+            <div key={r.day} className="flex items-center gap-4">
+              <span
+                className={`text-sm font-medium w-6 shrink-0 ${
+                  isBest ? 'text-violet-600' : 'text-gray-600'
+                }`}
+              >
                 {DAY_KOR[r.day]}
               </span>
+              <div className="flex gap-1.5 flex-1">
+                {Array.from({ length: MAX_DOTS }).map((_, i) => {
+                  const filled = i < dotCount;
+                  if (!filled) {
+                    return <span key={i} className="w-3 h-3 rounded-full bg-gray-100" />;
+                  }
+                  return (
+                    <span
+                      key={i}
+                      className={`w-3 h-3 rounded-full ${
+                        isBest
+                          ? 'bg-violet-500'
+                          : fillRatio >= 0.8
+                            ? 'bg-violet-400'
+                            : fillRatio >= 0.5
+                              ? 'bg-violet-300'
+                              : 'bg-violet-200'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* 인사이트 멘트 */}
-      {showInsight && (
+      {showBestMention && (
         <div className="mt-4 pt-3 border-t border-gray-100">
           <p className="text-xs text-gray-600 leading-relaxed">
             <span className="font-semibold text-violet-600">{DAY_KOR[best.day]}요일</span>에 가장 좋은 컨디션을 보였어요.
