@@ -19,6 +19,7 @@ export default function WeeklyHighlightsCard({ studentId, weekStart, weekEnd }: 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+      if (!studentId || studentId === '0') return;  // ← 추가
     let cancelled = false;
     setLoading(true);
     fetchStudentTags(studentId, weekStart, weekEnd)
