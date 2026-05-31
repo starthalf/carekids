@@ -24,6 +24,7 @@ export default function GrowthCompareCard({ studentId, studentGrade, currentStat
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+      if (!studentId || studentId === '0') return;  // ← 추가
     let cancelled = false;
     setLoading(true);
 
