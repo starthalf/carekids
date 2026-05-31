@@ -33,70 +33,101 @@ export default function WeeklyRhythmCard({ studentId, childName }: Props) {
 
   if (loading) return null;
 
-  // 수업이 있던 요일만 (출석 기록 있는 요일)
-  const activeDays = rhythm.filter(r => r.attendance > 0);
-  if (activeDays.length === 0) return null;
-
-  // 요일 순서대로 정렬 (월→금)
-  const ordered = [...activeDays].sort(
-    (a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day)
+  // 전체 평일 (월~금) 데이터 - 수업 없는 요일도 포함
+  const allDays = DAY_ORDER.map(
+    day => rhythm.find(r => r.day === day) || { day, score: 0, attendance: 0, highHomework: 0, positiveTags: 0 }
   );
 
-  // best 찾기 (점수 기준)
+  // 수업 있던 요일만 (best 판단용)
+  const activeDays = allDays.filter(d => d.attendance > 0);
+  if (activeDays.length === 0) return null;
+
   const sorted = [...activeDays].sort((a, b) => b.score - a.score);
   const best = sorted[0];
   const showBestMention = sorted.length >= 2 && best.score - sorted[1].score >= 2;
-
-  // 각 요일의 컨디션 % = score / max score (max 100%)
-  // 가능한 최대 점수: 출석4 + 숙제high4 + 태그매주많이 -> 그 학생이 받은 max를 기준으로 정규화
   const maxScore = Math.max(...activeDays.map(d => d.score), 1);
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-slideUp">
-      <div className="flex items-center gap-2 mb-1">
-        <div className="w-8 h-8 rounded-full bg-violet-50 flex items-center justify-center">
-          <Activity className="w-4 h-4 text-violet-500" />
+      {/* 헤더 + 기간 뱃지 */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-violet-50 flex items-center justify-center">
+            <Activity className="w-4 h-4 text-violet-500" />
+          </div>
+          <h3 className="font-semibold text-gray-800">{childName}의 리듬</h3>
         </div>
-        <h3 className="font-semibold text-gray-800">{childName}의 리듬</h3>
+        <span className="text-[10px] font-semibold text-violet-600 bg-violet-50 px-2 py-1 rounded-full">
+          최근 4주 평균
+        </span>
       </div>
-      <p className="text-xs text-gray-400 ml-10 mb-4">최근 4주 수업일별 컨디션</p>
+      <p className="text-xs text-gray-400 ml-10 mb-5">요일별 컨디션 패턴</p>
 
-      {/* 가로 막대 + % */}
-      <div className="space-y-2.5">
-        {ordered.map(r => {
-          const isBest = r.day === best.day && showBestMention;
-          const pct = Math.round((r.score / maxScore) * 100);
+      {/* 가로 막대 (월~금) */}
+      <div className="flex items-end justify-between gap-2 px-1">
+        {allDays.map(r => {
+          const hasClass = r.attendance > 0;
+          const isBest = hasClass && r.day === best.day && showBestMention;
+          const pct = hasClass ? Math.round((r.score / maxScore) * 100) : 0;
+          const barHeightPx = hasClass ? Math.max((pct / 100) * 80, 8) : 0;
+
           return (
-            <div key={r.day} className="flex items-center gap-3">
+            <div key={r.day} className="flex-1 flex flex-col items-center gap-1.5">
+              {/* 퍼센트 */}
               <span
-                className={`text-sm font-medium w-6 shrink-0 ${
-                  isBest ? 'text-violet-600' : 'text-gray-600'
+                className={`text-[10px] font-semibold h-4 ${
+                  !hasClass
+                    ? 'text-gray-300'
+                    : isBest
+                      ? 'text-violet-600'
+                      : 'text-gray-500'
+                }`}
+              >
+                {hasClass ? `${pct}%` : '-'}
+              </span>
+
+              {/* 막대 영역 (고정 높이 80px) */}
+              <div className="w-full h-20 flex items-end justify-center">
+                {hasClass ? (
+                  <div
+                    className={`w-full rounded-md transition-all ${
+                      isBest
+                        ? 'bg-gradient-to-t from-violet-500 to-violet-400'
+                        : 'bg-gradient-to-t from-violet-300 to-violet-200'
+                    }`}
+                    style={{ height: `${barHeightPx}px` }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-full border-t-2 border-dashed border-gray-200" />
+                  </div>
+                )}
+              </div>
+
+              {/* 요일 라벨 */}
+              <span
+                className={`text-xs font-medium ${
+                  !hasClass
+                    ? 'text-gray-300'
+                    : isBest
+                      ? 'text-violet-600'
+                      : 'text-gray-600'
                 }`}
               >
                 {DAY_KOR[r.day]}
               </span>
-              <div className="flex-1 relative h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`absolute top-0 left-0 h-full rounded-full transition-all ${
-                    isBest ? 'bg-violet-500' : 'bg-violet-300'
-                  }`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span
-                className={`text-xs font-semibold w-10 text-right ${
-                  isBest ? 'text-violet-600' : 'text-gray-500'
-                }`}
-              >
-                {pct}%
-              </span>
+
+              {/* 수업 없음 표기 */}
+              {!hasClass && (
+                <span className="text-[9px] text-gray-300 leading-none">수업없음</span>
+              )}
             </div>
           );
         })}
       </div>
 
       {showBestMention && (
-        <div className="mt-4 pt-3 border-t border-gray-100">
+        <div className="mt-5 pt-3 border-t border-gray-100">
           <p className="text-xs text-gray-600 leading-relaxed">
             <span className="font-semibold text-violet-600">{DAY_KOR[best.day]}요일</span>에 가장 좋은 컨디션을 보였어요.
             {' '}공부 계획을 잡을 때 참고해보세요.
