@@ -15,9 +15,9 @@ export default defineConfig({
         'apple-touch-icon.png',
       ],
       manifest: {
-        name: '키즈윅 관리 (Kidsweek)',
-        short_name: '키즈윅 관리',
-        description: '원장·선생님을 위한 키즈윅 학원 운영 도구',
+        name: '키즈윅 (Kidsweek)',
+        short_name: '키즈윅',
+        description: '우리 아이의 학습 인사이트를 한눈에',
         theme_color: '#22c55e',
         background_color: '#ffffff',
         display: 'standalone',
@@ -53,7 +53,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Supabase 인증·실시간·DB API는 항상 네트워크 (RLS·실시간 데이터 stale 방지)
+        // Supabase 인증·실시간·DB API는 항상 네트워크
         navigateFallbackDenylist: [/^\/api/, /supabase\.co/],
         runtimeCaching: [
           {
@@ -66,8 +66,18 @@ export default defineConfig({
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
+          {
+            // 학생 사진 등 Supabase Storage 이미지
+            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*\.(?:png|jpg|jpeg|webp|gif)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'supabase-images',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
-        // 학원용은 페이지가 많아 번들이 큼 - 5MB까지 허용
+        // recharts 포함되어 번들이 큼 - 5MB까지 허용
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       devOptions: {
