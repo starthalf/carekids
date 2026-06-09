@@ -116,8 +116,12 @@ export default function HomePage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4 flex items-center animate-scaleIn">
-        <ChildAvatar child={currentChild} size="lg" />
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-center gap-3 animate-scaleIn">
+        <ChildAvatar child={currentChild} size="md" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-900 text-sm truncate">{currentChild.name}</p>
+          <p className="text-xs text-gray-500 truncate">{currentChild.grade}</p>
+        </div>
       </div>
 
       {isLoadingReport && (
