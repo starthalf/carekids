@@ -53,7 +53,7 @@ export default function ParentActionCard({ recommendedActions }: ParentActionCar
           </div>
         )}
 
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           {parentActions.map((action) => {
             const Icon = iconMap[action.icon] || Star;
             const isRecommended = recommendedActions.includes(action.id);
@@ -63,7 +63,7 @@ export default function ParentActionCard({ recommendedActions }: ParentActionCar
               <button
                 key={action.id}
                 onClick={() => handleActionClick(action.id)}
-                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all duration-200 bg-white shadow-sm border ${
+                className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-200 bg-white shadow-sm border min-w-0 ${
                   isSelected
                     ? 'ring-2 ring-primary-500 border-primary-200 scale-105'
                     : isRecommended
@@ -83,7 +83,7 @@ export default function ParentActionCard({ recommendedActions }: ParentActionCar
                   <Icon className="w-5 h-5" />
                 </div>
                 <span
-                  className={`text-xs font-medium ${
+                  className={`text-[11px] font-medium whitespace-nowrap ${
                     isSelected || isRecommended ? 'text-primary-700' : 'text-gray-600'
                   }`}
                 >
