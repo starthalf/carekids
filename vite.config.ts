@@ -15,10 +15,10 @@ export default defineConfig({
         'apple-touch-icon.png',
       ],
       manifest: {
-        name: '키즈윅 (Kidsweek)',
-        short_name: '키즈윅',
+        name: '키즈위크 (Kidsweek)',
+        short_name: '키즈위크',
         description: '우리 아이의 학습 인사이트를 한눈에',
-        theme_color: '#22c55e',
+        theme_color: '#8b5cf6',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
