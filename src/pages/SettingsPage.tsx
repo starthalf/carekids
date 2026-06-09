@@ -1,13 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { User, Bell, Shield, HelpCircle, ChevronRight, LogOut, Check } from 'lucide-react';
+import { Check, LogOut, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import StudentPhoto from '../components/avatar/StudentPhoto';
-
-const menuItems = [
-  { icon: Bell, label: '알림 설정', description: '푸시 알림 및 리마인더' },
-  { icon: Shield, label: '개인정보 보호', description: '데이터 관리 및 보안' },
-  { icon: HelpCircle, label: '도움말', description: 'FAQ 및 문의하기' },
-];
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -19,6 +13,23 @@ export default function SettingsPage() {
     navigate('/login');
   };
 
+  // 섹션 라벨: 본인 자녀(parent) vs 원장 미리보기(owner_preview) 분포로 동적 결정
+  const parentItems = myAcademies.filter((a) => a.source === 'parent');
+  const ownerItems = myAcademies.filter((a) => a.source === 'owner_preview');
+
+  let sectionLabel = '';
+  let sectionHint = '';
+  if (parentItems.length > 0 && ownerItems.length === 0) {
+    sectionLabel = `우리 아이 (${parentItems.length})`;
+    sectionHint = '자녀를 선택하면 그 아이의 주간 리포트를 봅니다';
+  } else if (ownerItems.length > 0 && parentItems.length === 0) {
+    sectionLabel = `우리 학원 학생 (${ownerItems.length})`;
+    sectionHint = '학원장으로서 부모님이 보시는 화면을 미리 확인합니다';
+  } else {
+    sectionLabel = `연결된 자녀 · 학원 학생 (${myAcademies.length})`;
+    sectionHint = '본인 자녀 + 원장 미리보기 학생이 함께 있습니다';
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4 pb-24">
       <header className="py-3">
@@ -28,9 +39,8 @@ export default function SettingsPage() {
 
       {/* 학원 / 자녀 선택 */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-        <h2 className="text-sm font-medium text-gray-500 mb-3">
-          연결된 학원 ({myAcademies.length})
-        </h2>
+        <h2 className="text-sm font-medium text-gray-700">{sectionLabel}</h2>
+        <p className="text-xs text-gray-400 mt-1 mb-3">{sectionHint}</p>
         {myAcademies.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-4">연결된 학원이 없습니다</p>
         ) : (
@@ -69,9 +79,9 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* 계정 + 메뉴 */}
+      {/* 계정 — 메뉴 항목은 추후 구현 (알림 설정 / 개인정보 보호 / 도움말) */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+        <div className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
             <User className="w-5 h-5 text-primary-600" />
           </div>
@@ -80,26 +90,6 @@ export default function SettingsPage() {
             <p className="text-sm text-gray-500 truncate">{parent?.email}</p>
           </div>
         </div>
-
-        {menuItems.map((item, index) => (
-          <button
-            key={item.label}
-            className={`w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors ${
-              index < menuItems.length - 1 ? 'border-b border-gray-100' : ''
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-                <item.icon className="w-4 h-4 text-gray-600" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-gray-800 text-sm">{item.label}</p>
-                <p className="text-xs text-gray-500">{item.description}</p>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
-          </button>
-        ))}
       </div>
 
       <button
