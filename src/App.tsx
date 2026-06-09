@@ -6,6 +6,8 @@ import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
+import PrivacyPage from './pages/PrivacyPage';
+import HelpPage from './pages/HelpPage';
 import InvitePage from './pages/InvitePage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -55,6 +57,20 @@ function AppRoutes() {
         <ProtectedRoute>
           <ChildDataProvider>
             <AppLayout><SettingsPage /></AppLayout>
+          </ChildDataProvider>
+        </ProtectedRoute>
+      } />
+      <Route path="/settings/privacy" element={
+        <ProtectedRoute>
+          <ChildDataProvider>
+            <AppLayout><PrivacyPage /></AppLayout>
+          </ChildDataProvider>
+        </ProtectedRoute>
+      } />
+      <Route path="/settings/help" element={
+        <ProtectedRoute>
+          <ChildDataProvider>
+            <AppLayout><HelpPage /></AppLayout>
           </ChildDataProvider>
         </ProtectedRoute>
       } />
