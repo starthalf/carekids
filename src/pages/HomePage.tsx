@@ -16,8 +16,10 @@ export default function HomePage() {
   const {
     currentChild,
     currentReport,
+    previousStats,
     currentWeekIndex,
     isLoadingReport,
+    isNewStudent,
     goToPreviousWeek,
     goToNextWeek,
     canGoNext,
@@ -86,7 +88,6 @@ export default function HomePage() {
         )}
       </header>
 
-      {/* 주차 네비게이션 */}
       <div className="flex items-center justify-between bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-100">
         <button
           onClick={goToPreviousWeek}
@@ -126,11 +127,33 @@ export default function HomePage() {
         </div>
       )}
 
-      {!isLoadingReport && currentReport && (
+      {/* 신규 학생 안내 — weekly_insights row 0개 */}
+      {!isLoadingReport && isNewStudent && (
+        <div className="bg-gradient-to-br from-primary-50 to-white rounded-2xl shadow-sm border border-primary-100 p-6 animate-scaleIn">
+          <div className="text-4xl mb-3">🌱</div>
+          <h2 className="text-base font-bold text-gray-900 mb-2">
+            {currentChild.name}은(는) KidsInside에 새로 오셨네요!
+          </h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-4">
+            학원에서 한 주~두 주 정도 데이터가 쌓이면<br/>
+            {currentChild.name}만의 학습 리듬을 분석해 드릴게요.
+          </p>
+          <div className="bg-white/70 rounded-xl p-4 border border-primary-100/50">
+            <p className="text-xs text-gray-500 leading-relaxed">
+              💡 매주 월요일 아침, 한 주치 학원 일상을 분석한<br/>
+              따뜻한 리포트가 도착합니다.
+            </p>
+          </div>
+          <p className="text-xs text-gray-400 mt-4 text-center">
+            그동안 "기록" 탭에서 학원 일상을 확인하실 수 있어요
+          </p>
+        </div>
+      )}
+
+      {!isLoadingReport && !isNewStudent && currentReport && (
         <>
-          {/* 1. 5축 차트 + 해시태그 */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">
-            <PentagonChart stats={currentReport.stats} />
+            <PentagonChart stats={currentReport.stats} prevStats={previousStats} />
             <div className="border-t border-gray-100" />
             {currentReport.insights.hashtags.length > 0 && (
               <div className="overflow-x-auto scrollbar-hide">
@@ -148,35 +171,29 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* 2. 시즌 인사이트 */}
           <SeasonInsightCard insight={currentReport.insights.seasonInsight} />
 
-          {/* 3. 이번 주 빛난 순간 */}
           <WeeklyHighlightsCard
             studentId={currentChild.id}
             weekStart={currentReport.startDate}
             weekEnd={currentReport.endDate}
           />
 
-          {/* 4. 요일별 리듬 */}
           <WeeklyRhythmCard
             studentId={currentChild.id}
             childName={currentChild.name}
           />
 
-          {/* 5. 3개월 전과 비교 */}
           <GrowthCompareCard
             studentId={currentChild.id}
             studentGrade={studentGrade}
             currentStats={currentReport.stats}
           />
 
-          {/* 6. 부모 액션 */}
           {currentReport.insights.parentActions.length > 0 && (
             <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
           )}
 
-          {/* 7. 주간 트렌드 */}
           {currentReport.trends.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
               <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-tighter">Weekly Trend</h3>
