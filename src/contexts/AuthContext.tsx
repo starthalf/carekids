@@ -1,410 +1,241 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
-import { mapParent } from '../lib/mappers';
-import type { Parent } from '../types';
-
-export interface ParentAcademy {
-  parentStudentId: string;
-  academyId: string;
-  academyName: string;
-  studentId: string;
-  studentName: string;
-  studentGrade: number;
-  studentAvatar: string;
-  relationship: string;
-  source: 'parent' | 'owner_preview';
-}
-
-interface AuthContextType {
-  session: Session | null;
-  parent: Parent | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  myAcademies: ParentAcademy[];
-  selectedKey: string | null;
-  selectAcademy: (parentStudentId: string) => void;
-  currentAcademy: ParentAcademy | null;
-  isOwnerPreview: boolean;
-  signUpFromInvite: (params: { token: string; name: string; email: string; password: string; phone?: string }) => Promise<{ error?: string }>;
-  acceptInviteForExistingParent: (token: string) => Promise<{ error?: string }>;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signOut: () => Promise<void>;
-  refresh: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
-
-const SELECTED_KEY = 'parents_selected_key';
-
-function ownerVirtualKey(academyId: string, studentId: string): string {
-  return `owner__${academyId}__${studentId}`;
-}
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [parent, setParent] = useState<Parent | null>(null);
-  const [isOwnerAccount, setIsOwnerAccount] = useState<boolean>(false);
-  const [myAcademies, setMyAcademies] = useState<ParentAcademy[]>([]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // 중복 호출 방지: 마지막으로 load한 userId
-  const loadedUserIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const init = async () => {
-      console.log('[AUTH] init start');
-      try {
-        const { data } = await supabase.auth.getSession();
-        console.log('[AUTH] getSession done, user:', data.session?.user?.id);
-        setSession(data.session);
-        if (data.session) {
-          await loadIdentityAndAcademies(data.session.user.id);
-        }
-      } catch (err) {
-        console.error('[AUTH] init error:', err);
-      } finally {
-        console.log('[AUTH] init finally');
-        setIsLoading(false);
-      }
-    };
-    init();
-
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      console.log('[AUTH] state change:', event);
-
-      // INITIAL_SESSION은 init()에서 이미 처리. 무시.
-      if (event === 'INITIAL_SESSION') {
-        return;
-      }
-
-      setSession(newSession);
-      if (newSession) {
-        // 같은 user_id면 중복 호출 방지
-        if (loadedUserIdRef.current === newSession.user.id) {
-          console.log('[AUTH] skip duplicate load for same user');
-          return;
-        }
-        try {
-          await loadIdentityAndAcademies(newSession.user.id);
-        } catch (err) {
-          console.error('[AUTH] state change error:', err);
-        }
-      } else {
-        loadedUserIdRef.current = null;
-        setParent(null);
-        setIsOwnerAccount(false);
-        setMyAcademies([]);
-        setSelectedKey(null);
-      }
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
-
-  const loadIdentityAndAcademies = async (authUserId: string) => {
-    console.log('[LOAD] identity query start');
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('identity query timeout 10s')), 10000)
-    );
-
-    try {
-      // parent + teacher 두 정체성을 병렬 조회
-      const parentPromise = supabase
-        .from('parents')
-        .select('*')
-        .eq('auth_user_id', authUserId)
-        .maybeSingle();
-      const teacherPromise = supabase
-        .from('teachers')
-        .select('id, academy_id, name, role')
-        .eq('auth_user_id', authUserId)
-        .maybeSingle();
-
-      const [parentResult, teacherResult]: any = await Promise.race([
-        Promise.all([parentPromise, teacherPromise]),
-        timeout,
-      ]);
-
-      const parentRow = parentResult?.data || null;
-      const teacherRow = teacherResult?.data || null;
-      const isOwner = teacherRow?.role === 'owner';
-
-      console.log('[LOAD] parent:', !!parentRow, 'teacher owner:', isOwner);
-
-      // 둘 다 없으면 학부모도 학원장도 아님 → 빈 상태
-      if (!parentRow && !isOwner) {
-        setParent(null);
-        setIsOwnerAccount(false);
-        setMyAcademies([]);
-        loadedUserIdRef.current = authUserId;
-        return;
-      }
-
-      // 1. parent 정체성 처리
-      let parentAcademies: ParentAcademy[] = [];
-      if (parentRow) {
-        const p = mapParent(parentRow);
-        setParent(p);
-
-        const { data: psRows } = await supabase
-          .from('parent_students')
-          .select(`
-            id, academy_id, student_id, relationship, status,
-            students(name, grade, avatar),
-            academies(name)
-          `)
-          .eq('parent_id', p.id)
-          .eq('status', 'active');
-
-        parentAcademies = (psRows || []).map((r: any) => ({
-          parentStudentId: r.id,
-          academyId: r.academy_id,
-          academyName: r.academies?.name || '학원',
-          studentId: r.student_id,
-          studentName: r.students?.name || '자녀',
-          studentGrade: r.students?.grade || 0,
-          studentAvatar: r.students?.avatar || '',
-          relationship: r.relationship,
-          source: 'parent' as const,
-        }));
-      } else {
-        setParent(null);
-      }
-
-      // 2. 학원장 정체성 처리
-      let ownerAcademies: ParentAcademy[] = [];
-      setIsOwnerAccount(isOwner);
-      if (isOwner && teacherRow) {
-        const { data: academyRow } = await supabase
-          .from('academies')
-          .select('id, name')
-          .eq('id', teacherRow.academy_id)
-          .maybeSingle();
-
-        const { data: studentRows } = await supabase
-          .from('students')
-          .select('id, name, grade, avatar')
-          .eq('academy_id', teacherRow.academy_id)
-          .order('grade')
-          .order('name');
-
-        const academyName = academyRow?.name || '학원';
-
-        ownerAcademies = (studentRows || []).map((s: any) => ({
-          parentStudentId: ownerVirtualKey(teacherRow.academy_id, s.id),
-          academyId: teacherRow.academy_id,
-          academyName,
-          studentId: s.id,
-          studentName: s.name,
-          studentGrade: s.grade,
-          studentAvatar: s.avatar || '',
-          relationship: '원장 미리보기',
-          source: 'owner_preview' as const,
-        }));
-
-        // 본인 자녀와 중복되는 학생은 owner_preview에서 제외
-        const parentStudentIds = new Set(parentAcademies.map(p => p.studentId));
-        ownerAcademies = ownerAcademies.filter(o => !parentStudentIds.has(o.studentId));
-      }
-
-      const combined = [...parentAcademies, ...ownerAcademies];
-      setMyAcademies(combined);
-
-      const saved = localStorage.getItem(SELECTED_KEY);
-      const validSaved = combined.find(a => a.parentStudentId === saved);
-      if (validSaved) {
-        setSelectedKey(saved);
-      } else if (combined.length > 0) {
-        const firstKey = combined[0].parentStudentId;
-        setSelectedKey(firstKey);
-        localStorage.setItem(SELECTED_KEY, firstKey);
-      } else {
-        setSelectedKey(null);
-      }
-
-      // load 성공 — 다음 동일 user 호출 skip 가능
-      loadedUserIdRef.current = authUserId;
-      console.log('[LOAD] done');
-    } catch (err) {
-      console.error('[LOAD] error:', err);
-      if (err instanceof Error && err.message.includes('timeout')) {
-        console.warn('[LOAD] timeout - keeping existing state');
-        return;
-      }
-      setParent(null);
-      setIsOwnerAccount(false);
-      setMyAcademies([]);
-    }
-  };
-
-  const selectAcademy = useCallback((parentStudentId: string) => {
-    setSelectedKey(parentStudentId);
-    localStorage.setItem(SELECTED_KEY, parentStudentId);
-  }, []);
-
-  const refresh = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      loadedUserIdRef.current = null;
-      await loadIdentityAndAcademies(data.session.user.id);
-    }
-  }, []);
-
-  const signUpFromInvite = async (params: { token: string; name: string; email: string; password: string; phone?: string }) => {
-    const { token, name, email, password, phone } = params;
-
-    const { data: invite, error: inviteErr } = await supabase
-      .from('parent_invites')
-      .select('*')
-      .eq('token', token)
-      .eq('status', 'pending')
-      .maybeSingle();
-    if (inviteErr || !invite) return { error: '유효하지 않은 초대 링크입니다' };
-    if (new Date(invite.expires_at) < new Date()) return { error: '만료된 초대 링크입니다' };
-
-    const { data: authData, error: authErr } = await supabase.auth.signUp({ email, password });
-    if (authErr || !authData.user) return { error: authErr?.message || '가입 실패' };
-
-    const userId = authData.user.id;
-
-    const { data: newParent, error: pErr } = await supabase
-      .from('parents')
-      .insert({ auth_user_id: userId, name, email, phone: phone || null })
-      .select()
-      .single();
-    if (pErr || !newParent) return { error: `부모 정보 생성 실패: ${pErr?.message}` };
-
-    const { error: psErr } = await supabase
-      .from('parent_students')
-      .upsert(
-        {
-          parent_id: newParent.id,
-          student_id: invite.student_id,
-          academy_id: invite.academy_id,
-          relationship: invite.relationship,
-          status: 'active',
-          removed_at: null,
-        },
-        { onConflict: 'parent_id,student_id' }
-      );
-    if (psErr) return { error: psErr.message };
-
-    await supabase
-      .from('parent_invites')
-      .update({ status: 'used', used_by_parent_id: newParent.id, used_at: new Date().toISOString() })
-      .eq('id', invite.id);
-
-    loadedUserIdRef.current = null;
-    await loadIdentityAndAcademies(userId);
-    return {};
-  };
-
-  const acceptInviteForExistingParent = async (token: string) => {
-    const { data: invite, error: inviteErr } = await supabase
-      .from('parent_invites')
-      .select('*')
-      .eq('token', token)
-      .eq('status', 'pending')
-      .maybeSingle();
-    if (inviteErr || !invite) return { error: '유효하지 않은 초대' };
-    if (new Date(invite.expires_at) < new Date()) return { error: '만료된 초대' };
-
-    const sessionData = await supabase.auth.getSession();
-    const userId = sessionData.data.session?.user.id;
-    if (!userId) return { error: '로그인 정보 없음' };
-
-    const { data: parentRow } = await supabase
-      .from('parents')
-      .select('*')
-      .eq('auth_user_id', userId)
-      .maybeSingle();
-    if (!parentRow) return { error: '부모 정보 없음' };
-
-    const { error: psErr } = await supabase
-      .from('parent_students')
-      .upsert(
-        {
-          parent_id: parentRow.id,
-          student_id: invite.student_id,
-          academy_id: invite.academy_id,
-          relationship: invite.relationship,
-          status: 'active',
-          removed_at: null,
-        },
-        { onConflict: 'parent_id,student_id' }
-      );
-    if (psErr) return { error: psErr.message };
-
-    await supabase
-      .from('parent_invites')
-      .update({ status: 'used', used_by_parent_id: parentRow.id, used_at: new Date().toISOString() })
-      .eq('id', invite.id);
-
-    loadedUserIdRef.current = null;
-    await loadIdentityAndAcademies(userId);
-    const newKey = (await getParentStudentIdForStudent(parentRow.id, invite.student_id)) || null;
-    if (newKey) selectAcademy(newKey);
-    return {};
-  };
-
-  const getParentStudentIdForStudent = async (parentId: string, studentId: string): Promise<string | null> => {
-    const { data } = await supabase
-      .from('parent_students')
-      .select('id')
-      .eq('parent_id', parentId)
-      .eq('student_id', studentId)
-      .eq('status', 'active')
-      .maybeSingle();
-    return data?.id || null;
-  };
-
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    return {};
-  };
-
-  const signOut = async () => {
-    localStorage.removeItem(SELECTED_KEY);
-    loadedUserIdRef.current = null;
-    await supabase.auth.signOut();
-  };
-
-  const currentAcademy = myAcademies.find(a => a.parentStudentId === selectedKey) || null;
-  const isOwnerPreview = currentAcademy?.source === 'owner_preview';
-
-  const isAuthenticated = !!session && (!!parent || isOwnerAccount);
-
-  return (
-    <AuthContext.Provider
-      value={{
-        session,
-        parent,
-        isAuthenticated,
-        isLoading,
-        myAcademies,
-        selectedKey,
-        selectAcademy,
-        currentAcademy,
-        isOwnerPreview,
-        signUpFromInvite,
-        acceptInviteForExistingParent,
-        signIn,
-        signOut,
-        refresh,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
-}
+blitz.bd880c29.js:19 [Contextify] [WARNING] running source code in new context
+(anonymous) @ blitz.bd880c29.js:19
+_0x2362da @ blitz.bd880c29.js:31
+runInContext @ blitz.bd880c29.js:31
+runInContext @ node:vm:149
+runInNewContext @ node:vm:154
+runInNewContext @ node:vm:310
+(anonymous) @ node:repl:207
+compileForInternalLoader @ realm:400
+compileForPublicLoader @ realm:338
+loadBuiltinModule @ helpers:121
+loadBuiltinWithHooks @ loader:1154
+(anonymous) @ loader:1228
+traceSync @ node:diagnostics_channel:328
+wrapModuleLoad @ loader:237
+(anonymous) @ loader:1463
+require2 @ helpers:147
+_0x3c5da0 @ blitz.bd880c29.js:31
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+(anonymous) @ blitz.bd880c29.js:31
+Promise.then
+then @ blitz.bd880c29.js:31
+eval @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+_0x2c1dcb @ blitz.bd880c29.js:31
+(anonymous) @ loader:1706
+(anonymous) @ loader:1839
+(anonymous) @ loader:1441
+(anonymous) @ loader:1263
+traceSync @ node:diagnostics_channel:328
+wrapModuleLoad @ loader:237
+executeUserEntryPoint @ run_main:171
+(anonymous) @ run_main_module:36
+_0x533651 @ blitz.bd880c29.js:31
+executeBootstrapper @ blitz.bd880c29.js:31
+startExecution @ blitz.bd880c29.js:31
+run @ blitz.bd880c29.js:31
+await in run
+_0x4314dc @ blitz.bd880c29.js:19
+Worker.postMessage
+(anonymous) @ iframe.main.bd880c29.js:1
+_0x55cf2a @ iframe.main.bd880c29.js:1
+apply @ iframe.main.bd880c29.js:1
+run @ iframe.main.bd880c29.js:4
+await in run
+_registerListenersAndRunOnInstance @ iframe.main.bd880c29.js:11
+run @ iframe.main.bd880c29.js:11
+_0x7d8e8a @ iframe.main.bd880c29.js:1
+blitz.bd880c29.js:19 [Contextify] [WARNING] running source code in new context
+(anonymous) @ blitz.bd880c29.js:19
+_0x2362da @ blitz.bd880c29.js:31
+runInContext @ blitz.bd880c29.js:31
+runInContext @ node:vm:149
+runInNewContext @ node:vm:154
+runInNewContext @ node:vm:310
+(anonymous) @ node:repl:207
+compileForInternalLoader @ realm:400
+compileForPublicLoader @ realm:338
+loadBuiltinModule @ helpers:121
+loadBuiltinWithHooks @ loader:1154
+(anonymous) @ loader:1228
+traceSync @ node:diagnostics_channel:328
+wrapModuleLoad @ loader:237
+(anonymous) @ loader:1463
+require2 @ helpers:147
+_0x3c5da0 @ blitz.bd880c29.js:31
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+(anonymous) @ blitz.bd880c29.js:31
+Promise.then
+then @ blitz.bd880c29.js:31
+eval @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+_0x2c1dcb @ blitz.bd880c29.js:31
+(anonymous) @ loader:1706
+(anonymous) @ loader:1839
+(anonymous) @ loader:1441
+(anonymous) @ loader:1263
+traceSync @ node:diagnostics_channel:328
+wrapModuleLoad @ loader:237
+executeUserEntryPoint @ run_main:171
+(anonymous) @ run_main_module:36
+_0x533651 @ blitz.bd880c29.js:31
+executeBootstrapper @ blitz.bd880c29.js:31
+startExecution @ blitz.bd880c29.js:31
+run @ blitz.bd880c29.js:31
+await in run
+_0x4314dc @ blitz.bd880c29.js:19
+Worker.postMessage
+(anonymous) @ iframe.main.bd880c29.js:1
+_0x55cf2a @ iframe.main.bd880c29.js:1
+apply @ iframe.main.bd880c29.js:1
+run @ iframe.main.bd880c29.js:4
+await in run
+_registerListenersAndRunOnInstance @ iframe.main.bd880c29.js:11
+run @ iframe.main.bd880c29.js:11
+_0x7d8e8a @ iframe.main.bd880c29.js:1
+blitz.bd880c29.js:19 [Contextify] [WARNING] running source code in new context
+(anonymous) @ blitz.bd880c29.js:19
+_0x2362da @ blitz.bd880c29.js:31
+runInContext @ blitz.bd880c29.js:31
+runInContext @ node:vm:149
+runInNewContext @ node:vm:154
+runInNewContext @ node:vm:310
+(anonymous) @ node:repl:207
+compileForInternalLoader @ realm:400
+compileForPublicLoader @ realm:338
+loadBuiltinModule @ helpers:121
+loadBuiltinWithHooks @ loader:1154
+(anonymous) @ loader:1228
+traceSync @ node:diagnostics_channel:328
+wrapModuleLoad @ loader:237
+(anonymous) @ loader:1463
+require2 @ helpers:147
+_0x3c5da0 @ blitz.bd880c29.js:31
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+(anonymous) @ blitz.bd880c29.js:31
+Promise.then
+then @ blitz.bd880c29.js:31
+eval @ jsh:35
+eval @ jsh:35
+r @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+eval @ jsh:35
+_0x2c1dcb @ blitz.bd880c29.js:31
+(anonymous) @ loader:1706
+(anonymous) @ loader:1839
+(anonymous) @ loader:1441
+(anonymous) @ loader:1263
+traceSync @ node:diagnostics_channel:328
+wrapModuleLoad @ loader:237
+executeUserEntryPoint @ run_main:171
+(anonymous) @ run_main_module:36
+_0x533651 @ blitz.bd880c29.js:31
+executeBootstrapper @ blitz.bd880c29.js:31
+startExecution @ blitz.bd880c29.js:31
+run @ blitz.bd880c29.js:31
+await in run
+_0x4314dc @ blitz.bd880c29.js:19
+Worker.postMessage
+(anonymous) @ iframe.main.bd880c29.js:1
+_0x55cf2a @ iframe.main.bd880c29.js:1
+apply @ iframe.main.bd880c29.js:1
+run @ iframe.main.bd880c29.js:4
+await in run
+_registerListenersAndRunOnInstance @ iframe.main.bd880c29.js:11
+run @ iframe.main.bd880c29.js:11
+_0x7d8e8a @ iframe.main.bd880c29.js:1
+headless?coep=credentialless&experimental_node=1&version=1.6.5-internal.1:1 The resource https://w-credentialless-staticblitz.com/fetch.worker.bd880c29.js was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
+headless?coep=credentialless&experimental_node=1&version=1.6.5-internal.1:1 The resource https://w-credentialless-staticblitz.com/fetch.worker.bd880c29.js was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
+AuthContext.tsx:40 [AUTH] init start
+.webcontainer@runtime.bd880c29.js:26 Uncaught (in promise) Service Workers are not yet supported on StackBlitz, see https://github.com/stackblitz/webcontainer-core/issues/846.
+(anonymous) @ .webcontainer@runtime.bd880c29.js:26
+_0x24d1c2.<computed> @ .webcontainer@runtime.bd880c29.js:26
+(anonymous) @ registerSW.js:1
+PendingScript
+(anonymous) @ pwa-entry-point-loaded:13
+(anonymous) @ client:144
+notifyListeners @ client:144
+notifyListeners @ client:714
+handleMessage @ client:669
+(anonymous) @ client:546
+dispatchEvent @ .webcontainer@runtime.bd880c29.js:26
+_handleMessage @ .webcontainer@runtime.bd880c29.js:26
+_0x20e618.onmessage @ .webcontainer@runtime.bd880c29.js:26
+postMessage
+_write @ blitz.bd880c29.js:31
+writev @ blitz.bd880c29.js:31
+writevGeneric @ stream_base_commons:137
+(anonymous) @ node:net:964
+(anonymous) @ node:net:973
+doWrite @ writable:596
+clearBuffer @ writable:775
+(anonymous) @ writable:531
+sendFrame @ dep-CDnG8rE7.js:56649
+dispatch @ dep-CDnG8rE7.js:56586
+send @ dep-CDnG8rE7.js:56493
+send @ dep-CDnG8rE7.js:57656
+eval @ dep-CDnG8rE7.js:59350
+send @ dep-CDnG8rE7.js:59348
+eval @ index.js:677
+await in eval
+eval @ dep-CDnG8rE7.js:59257
+eval @ dep-CDnG8rE7.js:59257
+emit @ node:events:519
+receiverOnMessage @ dep-CDnG8rE7.js:58399
+emit @ node:events:519
+dataMessage @ dep-CDnG8rE7.js:55979
+getData @ dep-CDnG8rE7.js:55879
+startLoop @ dep-CDnG8rE7.js:55550
+_write @ dep-CDnG8rE7.js:55477
+writeOrBuffer @ writable:572
+_write @ writable:501
+(anonymous) @ writable:510
+socketOnData @ dep-CDnG8rE7.js:58534
+emit @ node:events:519
+addChunk @ readable:561
+readableAddChunkPushByteMode @ readable:512
+(anonymous) @ readable:392
+onStreamRead @ stream_base_commons:189
+(anonymous) @ blitz.bd880c29.js:31
+(anonymous) @ blitz.bd880c29.js:31
+(anonymous) @ blitz.bd880c29.js:31
+_0x5b8bb1 @ blitz.bd880c29.js:31
+_0x3ea73f @ blitz.bd880c29.js:31
+(anonymous) @ blitz.bd880c29.js:31
+_0x3e9187 @ blitz.bd880c29.js:31
+_0x43b570 @ blitz.bd880c29.js:31
+_0x51fed1 @ blitz.bd880c29.js:31
+entry.client-CdHvIF-5.js:9 WARN Captured error was ignored {"id":"yrSAh6NdICskEiZ5","count":1,"type":"preview","error":{"type":"PREVIEW_UNHANDLED_REJECTION","message":"Service Workers are not yet supported on StackBlitz, see https://github.com/stackblitz/webcontainer-core/issues/846.","pathname":"/","search":"","hash":"","previewId":"bcda52c9-6018-48dc-bd8d-6a562d1af73b","port":5173}}
+AuthContext.tsx:61 [AUTH] state change: TOKEN_REFRESHED
+AuthContext.tsx:101 [LOAD] queries start, authUserId: 48e9a598-3188-45d1-aad9-f0c3ef462001
