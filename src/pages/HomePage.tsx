@@ -180,7 +180,14 @@ export default function HomePage() {
           {/* 7. 주간 트렌드 */}
           {currentReport.trends.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
-              <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-tighter">Weekly Trend</h3>
+              <div className="flex items-baseline justify-between mb-1">
+                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Weekly Trend</h3>
+                <span className="text-[10px] text-gray-400">시험 점수 변동</span>
+              </div>
+              <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
+                점수는 학습 신호의 한 부분일 뿐이에요.<br/>
+                위의 인사이트와 함께 자녀의 한 주를 입체적으로 봐주세요.
+              </p>
               <TrendCard trends={currentReport.trends} />
             </div>
           )}
