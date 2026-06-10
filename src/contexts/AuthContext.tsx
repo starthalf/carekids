@@ -49,18 +49,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 중복 호출 방지: 이미 load한 userId 기록 + 현재 진행 중인 load Promise 캐시
+  // 중복 호출 방지: 마지막으로 load한 userId
   const loadedUserIdRef = useRef<string | null>(null);
-  const inflightLoadRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
     const init = async () => {
       console.log('[AUTH] init start');
       try {
         const { data } = await supabase.auth.getSession();
-        if (cancelled) return;
         console.log('[AUTH] getSession done, user:', data.session?.user?.id);
         setSession(data.session);
         if (data.session) {
@@ -69,10 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('[AUTH] init error:', err);
       } finally {
-        if (!cancelled) {
-          console.log('[AUTH] init finally');
-          setIsLoading(false);
-        }
+        console.log('[AUTH] init finally');
+        setIsLoading(false);
       }
     };
     init();
@@ -81,14 +75,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AUTH] state change:', event);
 
       // INITIAL_SESSION은 init()에서 이미 처리. 무시.
-      // (자동 로그인 시 중복 호출이 발생해 화면 진입이 느려지는 주요 원인)
       if (event === 'INITIAL_SESSION') {
         return;
       }
 
       setSession(newSession);
       if (newSession) {
-        // 같은 user_id면 이미 load됐는지 확인
+        // 같은 user_id면 중복 호출 방지
         if (loadedUserIdRef.current === newSession.user.id) {
           console.log('[AUTH] skip duplicate load for same user');
           return;
@@ -108,133 +101,144 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      cancelled = true;
       sub.subscription.unsubscribe();
     };
   }, []);
 
-  const loadIdentityAndAcademies = async (authUserId: string): Promise<void> => {
-    // 이미 같은 user로 load 중이면 그 Promise를 공유 (race 방지)
-    if (inflightLoadRef.current && loadedUserIdRef.current === authUserId) {
-      return inflightLoadRef.current;
-    }
+  const loadIdentityAndAcademies = async (authUserId: string) => {
+    console.log('[LOAD] identity query start');
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('identity query timeout 10s')), 10000)
+    );
 
-    const promise = (async () => {
-      console.log('[LOAD] identity query start');
-      try {
-        // parent + teacher 두 정체성을 병렬 조회 (timeout 없이 — 자연스러운 응답 시간 활용)
-        const [parentResult, teacherResult] = await Promise.all([
-          supabase.from('parents').select('*').eq('auth_user_id', authUserId).maybeSingle(),
-          supabase.from('teachers').select('id, academy_id, name, role').eq('auth_user_id', authUserId).maybeSingle(),
-        ]);
+    try {
+      // parent + teacher 두 정체성을 병렬 조회
+      const parentPromise = supabase
+        .from('parents')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
+      const teacherPromise = supabase
+        .from('teachers')
+        .select('id, academy_id, name, role')
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
 
-        const parentRow = parentResult?.data || null;
-        const teacherRow = teacherResult?.data || null;
-        const isOwner = teacherRow?.role === 'owner';
+      const [parentResult, teacherResult]: any = await Promise.race([
+        Promise.all([parentPromise, teacherPromise]),
+        timeout,
+      ]);
 
-        console.log('[LOAD] parent:', !!parentRow, 'teacher owner:', isOwner);
+      const parentRow = parentResult?.data || null;
+      const teacherRow = teacherResult?.data || null;
+      const isOwner = teacherRow?.role === 'owner';
 
-        if (!parentRow && !isOwner) {
-          setParent(null);
-          setIsOwnerAccount(false);
-          setMyAcademies([]);
-          loadedUserIdRef.current = authUserId;
-          return;
-        }
+      console.log('[LOAD] parent:', !!parentRow, 'teacher owner:', isOwner);
 
-        // parent + owner 정체성 조회를 병렬화 (직렬 처리 → 병렬로)
-        let parentAcademies: ParentAcademy[] = [];
-        let ownerAcademies: ParentAcademy[] = [];
+      // 둘 다 없으면 학부모도 학원장도 아님 → 빈 상태
+      if (!parentRow && !isOwner) {
+        setParent(null);
+        setIsOwnerAccount(false);
+        setMyAcademies([]);
+        loadedUserIdRef.current = authUserId;
+        return;
+      }
 
-        const parentPromise = parentRow
-          ? (async () => {
-              const p = mapParent(parentRow);
-              setParent(p);
-              const { data: psRows } = await supabase
-                .from('parent_students')
-                .select(`
-                  id, academy_id, student_id, relationship, status,
-                  students(name, grade, avatar),
-                  academies(name)
-                `)
-                .eq('parent_id', p.id)
-                .eq('status', 'active');
+      // 1. parent 정체성 처리
+      let parentAcademies: ParentAcademy[] = [];
+      if (parentRow) {
+        const p = mapParent(parentRow);
+        setParent(p);
 
-              parentAcademies = (psRows || []).map((r: any) => ({
-                parentStudentId: r.id,
-                academyId: r.academy_id,
-                academyName: r.academies?.name || '학원',
-                studentId: r.student_id,
-                studentName: r.students?.name || '자녀',
-                studentGrade: r.students?.grade || 0,
-                studentAvatar: r.students?.avatar || '',
-                relationship: r.relationship,
-                source: 'parent' as const,
-              }));
-            })()
-          : Promise.resolve();
+        const { data: psRows } = await supabase
+          .from('parent_students')
+          .select(`
+            id, academy_id, student_id, relationship, status,
+            students(name, grade, avatar),
+            academies(name)
+          `)
+          .eq('parent_id', p.id)
+          .eq('status', 'active');
 
-        const ownerPromise = (isOwner && teacherRow)
-          ? (async () => {
-              const [academyRes, studentRes] = await Promise.all([
-                supabase.from('academies').select('id, name').eq('id', teacherRow.academy_id).maybeSingle(),
-                supabase.from('students').select('id, name, grade, avatar').eq('academy_id', teacherRow.academy_id).order('grade').order('name'),
-              ]);
+        parentAcademies = (psRows || []).map((r: any) => ({
+          parentStudentId: r.id,
+          academyId: r.academy_id,
+          academyName: r.academies?.name || '학원',
+          studentId: r.student_id,
+          studentName: r.students?.name || '자녀',
+          studentGrade: r.students?.grade || 0,
+          studentAvatar: r.students?.avatar || '',
+          relationship: r.relationship,
+          source: 'parent' as const,
+        }));
+      } else {
+        setParent(null);
+      }
 
-              const academyName = academyRes.data?.name || '학원';
-              ownerAcademies = (studentRes.data || []).map((s: any) => ({
-                parentStudentId: ownerVirtualKey(teacherRow.academy_id, s.id),
-                academyId: teacherRow.academy_id,
-                academyName,
-                studentId: s.id,
-                studentName: s.name,
-                studentGrade: s.grade,
-                studentAvatar: s.avatar || '',
-                relationship: '원장 미리보기',
-                source: 'owner_preview' as const,
-              }));
-            })()
-          : Promise.resolve();
+      // 2. 학원장 정체성 처리
+      let ownerAcademies: ParentAcademy[] = [];
+      setIsOwnerAccount(isOwner);
+      if (isOwner && teacherRow) {
+        const { data: academyRow } = await supabase
+          .from('academies')
+          .select('id, name')
+          .eq('id', teacherRow.academy_id)
+          .maybeSingle();
 
-        await Promise.all([parentPromise, ownerPromise]);
+        const { data: studentRows } = await supabase
+          .from('students')
+          .select('id, name, grade, avatar')
+          .eq('academy_id', teacherRow.academy_id)
+          .order('grade')
+          .order('name');
 
-        if (!parentRow) setParent(null);
-        setIsOwnerAccount(isOwner);
+        const academyName = academyRow?.name || '학원';
+
+        ownerAcademies = (studentRows || []).map((s: any) => ({
+          parentStudentId: ownerVirtualKey(teacherRow.academy_id, s.id),
+          academyId: teacherRow.academy_id,
+          academyName,
+          studentId: s.id,
+          studentName: s.name,
+          studentGrade: s.grade,
+          studentAvatar: s.avatar || '',
+          relationship: '원장 미리보기',
+          source: 'owner_preview' as const,
+        }));
 
         // 본인 자녀와 중복되는 학생은 owner_preview에서 제외
         const parentStudentIds = new Set(parentAcademies.map(p => p.studentId));
         ownerAcademies = ownerAcademies.filter(o => !parentStudentIds.has(o.studentId));
-
-        const combined = [...parentAcademies, ...ownerAcademies];
-        setMyAcademies(combined);
-
-        // selectedKey 복원
-        const saved = localStorage.getItem(SELECTED_KEY);
-        const validSaved = combined.find(a => a.parentStudentId === saved);
-        if (validSaved) {
-          setSelectedKey(saved);
-        } else if (combined.length > 0) {
-          const firstKey = combined[0].parentStudentId;
-          setSelectedKey(firstKey);
-          localStorage.setItem(SELECTED_KEY, firstKey);
-        } else {
-          setSelectedKey(null);
-        }
-
-        loadedUserIdRef.current = authUserId;
-        console.log('[LOAD] done');
-      } catch (err) {
-        console.error('[LOAD] error:', err);
-        setParent(null);
-        setIsOwnerAccount(false);
-        setMyAcademies([]);
-      } finally {
-        inflightLoadRef.current = null;
       }
-    })();
 
-    inflightLoadRef.current = promise;
-    return promise;
+      const combined = [...parentAcademies, ...ownerAcademies];
+      setMyAcademies(combined);
+
+      const saved = localStorage.getItem(SELECTED_KEY);
+      const validSaved = combined.find(a => a.parentStudentId === saved);
+      if (validSaved) {
+        setSelectedKey(saved);
+      } else if (combined.length > 0) {
+        const firstKey = combined[0].parentStudentId;
+        setSelectedKey(firstKey);
+        localStorage.setItem(SELECTED_KEY, firstKey);
+      } else {
+        setSelectedKey(null);
+      }
+
+      // load 성공 — 다음 동일 user 호출 skip 가능
+      loadedUserIdRef.current = authUserId;
+      console.log('[LOAD] done');
+    } catch (err) {
+      console.error('[LOAD] error:', err);
+      if (err instanceof Error && err.message.includes('timeout')) {
+        console.warn('[LOAD] timeout - keeping existing state');
+        return;
+      }
+      setParent(null);
+      setIsOwnerAccount(false);
+      setMyAcademies([]);
+    }
   };
 
   const selectAcademy = useCallback((parentStudentId: string) => {
@@ -245,7 +249,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     if (data.session) {
-      // 명시적 refresh: 캐시 무효화하고 재조회
       loadedUserIdRef.current = null;
       await loadIdentityAndAcademies(data.session.user.id);
     }
