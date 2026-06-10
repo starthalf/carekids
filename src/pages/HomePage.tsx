@@ -16,6 +16,7 @@ export default function HomePage() {
   const {
     currentChild,
     currentReport,
+    previousStats,
     currentWeekIndex,
     isLoadingReport,
     goToPreviousWeek,
@@ -130,7 +131,7 @@ export default function HomePage() {
         <>
           {/* 1. 5축 차트 + 해시태그 */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">
-            <PentagonChart stats={currentReport.stats} />
+            <PentagonChart stats={currentReport.stats} prevStats={previousStats} />
             <div className="border-t border-gray-100" />
             {currentReport.insights.hashtags.length > 0 && (
               <div className="overflow-x-auto scrollbar-hide">
