@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { mapParent } from '../lib/mappers';
@@ -21,15 +21,18 @@ interface AuthContextType {
   parent: Parent | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+
   myAcademies: ParentAcademy[];
   selectedKey: string | null;
   selectAcademy: (parentStudentId: string) => void;
   currentAcademy: ParentAcademy | null;
   isOwnerPreview: boolean;
+
   signUpFromInvite: (params: { token: string; name: string; email: string; password: string; phone?: string }) => Promise<{ error?: string }>;
   acceptInviteForExistingParent: (token: string) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+
   refresh: () => Promise<void>;
 }
 
@@ -49,37 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadedUserIdRef = useRef<string | null>(null);
-  const initDoneRef = useRef<boolean>(false);  // init 완료 여부 — 어디서든 한 번만
-
-  // 안전장치: init이 어떤 이유로든 끝나면 isLoading=false 1회만
-  const markInitDone = (where: string) => {
-    if (initDoneRef.current) return;
-    initDoneRef.current = true;
-    console.log(`[AUTH] init done by ${where}`);
-    setIsLoading(false);
-  };
-
   useEffect(() => {
-    // 안전 timeout: 5초 안에 init 완료 안 되면 강제로 isLoading=false
-    // (StackBlitz 환경에서 getSession이 멈추는 케이스 보호)
-    const safetyTimer = setTimeout(() => {
-      markInitDone('safety-timeout-5s');
-    }, 5000);
-
     const init = async () => {
       console.log('[AUTH] init start');
       try {
-        // getSession에도 3초 timeout — 멈추면 onAuthStateChange가 받아줌
-        const sessionPromise = supabase.auth.getSession();
-        const timeout = new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => {
-            console.warn('[AUTH] getSession timeout 3s - relying on auth state change');
-            resolve({ data: { session: null } });
-          }, 3000)
-        );
-
-        const { data } = await Promise.race([sessionPromise, timeout]);
+        const { data } = await supabase.auth.getSession();
         console.log('[AUTH] getSession done, user:', data.session?.user?.id);
         setSession(data.session);
         if (data.session) {
@@ -88,7 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('[AUTH] init error:', err);
       } finally {
-        markInitDone('init-finally');
+        console.log('[AUTH] init finally');
+        setIsLoading(false);
       }
     };
     init();
@@ -96,41 +74,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       console.log('[AUTH] state change:', event);
 
-      // INITIAL_SESSION은 init이 잡음 (init 완료 전이면 init에서 처리할 거고,
-      // 완료 후면 이미 같은 session으로 load됐을 것)
-      if (event === 'INITIAL_SESSION' && initDoneRef.current) {
+      // INITIAL_SESSION은 init()에서 이미 처리하므로 무시.
+      // (자동 로그인 시 init + 이 콜백이 중복으로 load를 호출해
+      //  무거운 쿼리가 2번 도는 것을 막아 자동 로그인 속도를 개선)
+      if (event === 'INITIAL_SESSION') {
         return;
       }
 
       setSession(newSession);
-
       if (newSession) {
-        // 같은 user_id로 이미 load했으면 skip
-        if (loadedUserIdRef.current === newSession.user.id) {
-          console.log('[AUTH] skip duplicate load for same user');
-          // init이 안 끝났으면 여기서라도 끝내줌 (getSession 멈춤 보호)
-          markInitDone('state-change-skip');
-          return;
-        }
         try {
           await loadIdentityAndAcademies(newSession.user.id);
         } catch (err) {
           console.error('[AUTH] state change error:', err);
         }
-        // init이 멈춰있어도 state change에서 load가 끝나면 화면 표시
-        markInitDone('state-change-loaded');
       } else {
-        loadedUserIdRef.current = null;
         setParent(null);
         setIsOwnerAccount(false);
         setMyAcademies([]);
         setSelectedKey(null);
-        markInitDone('state-change-no-session');
       }
     });
 
     return () => {
-      clearTimeout(safetyTimer);
       sub.subscription.unsubscribe();
     };
   }, []);
@@ -142,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     try {
+      // parent + teacher 두 정체성을 병렬 조회
       const parentPromise = supabase
         .from('parents')
         .select('*')
@@ -164,14 +131,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('[LOAD] parent:', !!parentRow, 'teacher owner:', isOwner);
 
+      // 둘 다 없으면 학부모도 학원장도 아님 → 빈 상태
       if (!parentRow && !isOwner) {
         setParent(null);
         setIsOwnerAccount(false);
         setMyAcademies([]);
-        loadedUserIdRef.current = authUserId;
         return;
       }
 
+      // 1. parent 정체성 처리
       let parentAcademies: ParentAcademy[] = [];
       if (parentRow) {
         const p = mapParent(parentRow);
@@ -202,15 +170,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setParent(null);
       }
 
+      // 2. 학원장 정체성 처리
       let ownerAcademies: ParentAcademy[] = [];
       setIsOwnerAccount(isOwner);
       if (isOwner && teacherRow) {
+        // 본인 학원 정보
         const { data: academyRow } = await supabase
           .from('academies')
           .select('id, name')
           .eq('id', teacherRow.academy_id)
           .maybeSingle();
 
+        // 본인 학원 모든 학생
         const { data: studentRows } = await supabase
           .from('students')
           .select('id, name, grade, avatar')
@@ -232,13 +203,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           source: 'owner_preview' as const,
         }));
 
+        // 본인 자녀와 중복되는 학생은 owner_preview에서 제외
         const parentStudentIds = new Set(parentAcademies.map(p => p.studentId));
         ownerAcademies = ownerAcademies.filter(o => !parentStudentIds.has(o.studentId));
       }
 
+      // 최종 합치기
       const combined = [...parentAcademies, ...ownerAcademies];
       setMyAcademies(combined);
 
+      // selectedKey 복원
       const saved = localStorage.getItem(SELECTED_KEY);
       const validSaved = combined.find(a => a.parentStudentId === saved);
       if (validSaved) {
@@ -250,9 +224,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setSelectedKey(null);
       }
-
-      loadedUserIdRef.current = authUserId;
-      console.log('[LOAD] done');
     } catch (err) {
       console.error('[LOAD] error:', err);
       if (err instanceof Error && err.message.includes('timeout')) {
@@ -273,7 +244,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     if (data.session) {
-      loadedUserIdRef.current = null;
       await loadIdentityAndAcademies(data.session.user.id);
     }
   }, []);
@@ -322,7 +292,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .update({ status: 'used', used_by_parent_id: newParent.id, used_at: new Date().toISOString() })
       .eq('id', invite.id);
 
-    loadedUserIdRef.current = null;
     await loadIdentityAndAcademies(userId);
     return {};
   };
@@ -368,7 +337,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .update({ status: 'used', used_by_parent_id: parentRow.id, used_at: new Date().toISOString() })
       .eq('id', invite.id);
 
-    loadedUserIdRef.current = null;
     await loadIdentityAndAcademies(userId);
     const newKey = (await getParentStudentIdForStudent(parentRow.id, invite.student_id)) || null;
     if (newKey) selectAcademy(newKey);
@@ -394,7 +362,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     localStorage.removeItem(SELECTED_KEY);
-    loadedUserIdRef.current = null;
     await supabase.auth.signOut();
   };
 
