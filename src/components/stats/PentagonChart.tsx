@@ -122,4 +122,4 @@ export default function PentagonChart({ stats, prevStats }: PentagonChartProps) 
       </div>
     </div>
   );
-} 
+}
