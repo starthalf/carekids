@@ -124,7 +124,7 @@ export default function SettingsPage() {
       </button>
 
       <p className="text-center text-xs text-gray-400 mt-4">
-        키즈위크 학부모 v1.0.0
+        학부모 앱 v1.0.0
       </p>
     </div>
   );

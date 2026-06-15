@@ -40,7 +40,7 @@ export default function LoginPage() {
             </svg>
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">키즈위크 학부모</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">학부모 앱</h1>
           <p className="text-gray-500 text-sm">자녀의 학원 생활을 한눈에</p>
         </div>
 
