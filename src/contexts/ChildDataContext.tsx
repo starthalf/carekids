@@ -19,6 +19,7 @@ interface ChildDataContextType {
   previousStats: WeeklyReport['stats'] | null;
   isLoadingReport: boolean;
   isAIGenerated: boolean;
+  isNewStudent: boolean;          // weekly_insights row 0개 = 신규 학생
   goToPreviousWeek: () => void;
   goToNextWeek: () => void;
   canGoNext: boolean;
@@ -47,6 +48,7 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
   const [weekOffset, setWeekOffset] = useState(-1);
   const [currentReport, setCurrentReport] = useState<WeeklyReport | null>(null);
   const [previousStats, setPreviousStats] = useState<WeeklyReport['stats'] | null>(null);
+  const [isNewStudent, setIsNewStudent] = useState(false);
   const [isLoadingReport, setIsLoadingReport] = useState(true);
   const [isAIGenerated, setIsAIGenerated] = useState(false);
 
@@ -73,6 +75,7 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
     if (!currentAcademy) {
       setCurrentReport(null);
       setPreviousStats(null);
+      setIsNewStudent(false);
       setIsLoadingReport(false);
       return;
     }
@@ -85,8 +88,8 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
         const { start, end } = getWeekRange(weekOffset);
         const prev = getWeekRange(weekOffset - 1);
 
-        // 캐시 조회 — 현재 주 + 지난 주 stats 동시
-        const [thisRes, prevRes] = await Promise.all([
+        // 캐시 조회 — 현재 주 + 지난 주 stats + 총 row 수(신규 학생 판정) 동시
+        const [thisRes, prevRes, countRes] = await Promise.all([
           supabase
             .from('weekly_insights')
             .select('*')
@@ -99,6 +102,10 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
             .eq('student_id', currentAcademy.studentId)
             .eq('week_start', prev.start)
             .maybeSingle(),
+          supabase
+            .from('weekly_insights')
+            .select('id', { count: 'exact', head: true })
+            .eq('student_id', currentAcademy.studentId),
         ]);
 
         if (cancelled) return;
@@ -106,10 +113,14 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
         const cached = thisRes.data;
         const cacheErr = thisRes.error;
         const prevCached = prevRes.data;
+        const totalReports = countRes.count ?? 0;
+
+        // 신규 학생 판정: weekly_insights row가 하나도 없음
+        setIsNewStudent(totalReports === 0);
 
         // 지난 주 stats를 prevStats로 (점선용)
         setPreviousStats(prevCached?.stats ?? null);
-        console.log('[ChildData] prev stats:', prevCached?.stats ?? 'null');
+        console.log('[ChildData] prev stats:', prevCached?.stats ?? 'null', 'total:', totalReports);
 
         if (cached && !cacheErr) {
           console.log('[ChildData] cache hit (AI generated)');
@@ -207,6 +218,7 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
       previousStats,
       isLoadingReport,
       isAIGenerated,
+      isNewStudent,
       goToPreviousWeek,
       goToNextWeek,
       canGoNext,
@@ -214,7 +226,7 @@ export function ChildDataProvider({ children: childrenProp }: { children: ReactN
       academyName: currentAcademy?.academyName || '학원',
       hasData,
     }),
-    [currentChild, weekOffset, currentReport, previousStats, isLoadingReport, isAIGenerated, canGoNext, canGoPrevious, currentAcademy, hasData]
+    [currentChild, weekOffset, currentReport, previousStats, isLoadingReport, isAIGenerated, isNewStudent, canGoNext, canGoPrevious, currentAcademy, hasData]
   );
 
   return (
