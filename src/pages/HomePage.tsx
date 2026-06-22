@@ -25,10 +25,20 @@ export default function HomePage() {
     canGoPrevious,
     academyName,
   } = useChildData();
-  const { myAcademies, selectedKey, selectAcademy, currentAcademy } = useAuth();
+  const { myAcademies, selectedKey, selectAcademy, currentAcademy, identityLoaded } = useAuth();
 
   const [showSelector, setShowSelector] = useState(false);
   const hasMultiple = myAcademies.length > 1;
+
+  // 백그라운드 정체성 로딩 중 — 빈 학원 메시지 대신 스피너
+  if (!identityLoaded && myAcademies.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
+        <div className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p className="text-sm text-gray-400">불러오는 중...</p>
+      </div>
+    );
+  }
 
   if (myAcademies.length === 0) {
     return (
