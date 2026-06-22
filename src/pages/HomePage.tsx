@@ -11,6 +11,7 @@ import ParentActionCard from '../components/insight/ParentActionCard';
 import WeeklyHighlightsCard from '../components/insight/WeeklyHighlightsCard';
 import WeeklyRhythmCard from '../components/insight/WeeklyRhythmCard';
 import GrowthCompareCard from '../components/insight/GrowthCompareCard';
+import AxisActionGuide from '../components/insight/AxisActionGuide';
 
 export default function HomePage() {
   const {
@@ -19,16 +20,28 @@ export default function HomePage() {
     previousStats,
     currentWeekIndex,
     isLoadingReport,
+    isNewStudent,
     goToPreviousWeek,
     goToNextWeek,
     canGoNext,
     canGoPrevious,
     academyName,
   } = useChildData();
-  const { myAcademies, selectedKey, selectAcademy, currentAcademy } = useAuth();
+  const { myAcademies, selectedKey, selectAcademy, currentAcademy, identityLoaded } = useAuth();
 
   const [showSelector, setShowSelector] = useState(false);
+  const [activeTab, setActiveTab] = useState<'insight' | 'action'>('insight');
   const hasMultiple = myAcademies.length > 1;
+
+  // 백그라운드 정체성 로딩 중 — 빈 학원 메시지 대신 스피너
+  if (!identityLoaded && myAcademies.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
+        <div className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p className="text-sm text-gray-400">불러오는 중...</p>
+      </div>
+    );
+  }
 
   if (myAcademies.length === 0) {
     return (
@@ -121,13 +134,62 @@ export default function HomePage() {
         <ChildAvatar child={currentChild} size="md" />
       </div>
 
+      {/* 인사이트 / 액션 토글 */}
+      {!isLoadingReport && !isNewStudent && currentReport && (
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+          <button
+            onClick={() => setActiveTab('insight')}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === 'insight'
+                ? 'bg-white text-primary-600 shadow-sm'
+                : 'text-gray-500'
+            }`}
+          >
+            인사이트
+          </button>
+          <button
+            onClick={() => setActiveTab('action')}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === 'action'
+                ? 'bg-white text-primary-600 shadow-sm'
+                : 'text-gray-500'
+            }`}
+          >
+            이렇게 도와주세요
+          </button>
+        </div>
+      )}
+
       {isLoadingReport && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-sm text-gray-400">
           데이터 분석 중...
         </div>
       )}
 
-      {!isLoadingReport && currentReport && (
+      {/* 신규 학생 안내 — weekly_insights row 0개 */}
+      {!isLoadingReport && isNewStudent && (
+        <div className="bg-gradient-to-br from-primary-50 to-white rounded-2xl shadow-sm border border-primary-100 p-6 animate-scaleIn">
+          <div className="text-4xl mb-3">🌱</div>
+          <h2 className="text-base font-bold text-gray-900 mb-2">
+            {currentChild.name}은(는) 키즈위크에 새로 오셨네요!
+          </h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-4">
+            학원에서 한 주~두 주 정도 데이터가 쌓이면<br/>
+            {currentChild.name}만의 학습 리듬을 분석해 드릴게요.
+          </p>
+          <div className="bg-white/70 rounded-xl p-4 border border-primary-100/50">
+            <p className="text-xs text-gray-500 leading-relaxed">
+              💡 매주 월요일 아침, 한 주치 학원 일상을 분석한<br/>
+              따뜻한 리포트가 도착합니다.
+            </p>
+          </div>
+          <p className="text-xs text-gray-400 mt-4 text-center">
+            그동안 "기록" 탭에서 학원 일상을 확인하실 수 있어요
+          </p>
+        </div>
+      )}
+
+      {!isLoadingReport && !isNewStudent && currentReport && activeTab === 'insight' && (
         <>
           {/* 1. 5축 차트 + 해시태그 */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">
@@ -172,12 +234,7 @@ export default function HomePage() {
             currentStats={currentReport.stats}
           />
 
-          {/* 6. 부모 액션 */}
-          {currentReport.insights.parentActions.length > 0 && (
-            <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
-          )}
-
-          {/* 7. 주간 트렌드 */}
+          {/* 6. 주간 트렌드 */}
           {currentReport.trends.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-scaleIn">
               <div className="flex items-baseline justify-between mb-1">
@@ -190,6 +247,18 @@ export default function HomePage() {
               </p>
               <TrendCard trends={currentReport.trends} />
             </div>
+          )}
+        </>
+      )}
+
+      {!isLoadingReport && !isNewStudent && currentReport && activeTab === 'action' && (
+        <>
+          {/* 축별 맞춤 행동 가이드 */}
+          <AxisActionGuide stats={currentReport.stats} prevStats={previousStats} />
+
+          {/* 부모 액션 */}
+          {currentReport.insights.parentActions.length > 0 && (
+            <ParentActionCard recommendedActions={currentReport.insights.parentActions} />
           )}
         </>
       )}
