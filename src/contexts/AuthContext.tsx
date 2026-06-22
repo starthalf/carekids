@@ -27,6 +27,7 @@ interface AuthContextType {
   selectAcademy: (parentStudentId: string) => void;
   currentAcademy: ParentAcademy | null;
   isOwnerPreview: boolean;
+  identityLoaded: boolean;   // 백그라운드 정체성 로딩 완료 여부
 
   signUpFromInvite: (params: { token: string; name: string; email: string; password: string; phone?: string }) => Promise<{ error?: string }>;
   acceptInviteForExistingParent: (token: string) => Promise<{ error?: string }>;
@@ -51,48 +52,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [myAcademies, setMyAcademies] = useState<ParentAcademy[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // 백그라운드 정체성 로딩이 끝났는지. 끝나기 전엔 session만으로 인증 인정(깜빡임 방지),
+  // 끝난 후엔 실제 parent/owner 여부로 최종 판정.
+  const [identityLoaded, setIdentityLoaded] = useState(false);
 
   useEffect(() => {
     const init = async () => {
       console.log('[AUTH] init start');
       try {
-        const { data } = await supabase.auth.getSession();
+        // getSession에 3초 timeout — PWA에서 토큰 갱신이 매달리는 것 방지
+        const sessionPromise = supabase.auth.getSession();
+        const sessTimeout = new Promise<{ data: { session: null } }>((resolve) =>
+          setTimeout(() => {
+            console.warn('[AUTH] getSession timeout 3s');
+            resolve({ data: { session: null } });
+          }, 3000)
+        );
+        const { data } = await Promise.race([sessionPromise, sessTimeout]);
         console.log('[AUTH] getSession done, user:', data.session?.user?.id);
         setSession(data.session);
+
+        // ⚡ 세션 확인 즉시 화면 진입 (데이터 로딩 안 기다림)
+        setIsLoading(false);
+        console.log('[AUTH] init - session resolved, entering app');
+
         if (data.session) {
-          await loadIdentityAndAcademies(data.session.user.id);
+          loadIdentityAndAcademies(data.session.user.id).catch(err =>
+            console.error('[AUTH] background load error:', err)
+          );
         }
       } catch (err) {
         console.error('[AUTH] init error:', err);
-      } finally {
-        console.log('[AUTH] init finally');
         setIsLoading(false);
       }
     };
     init();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       console.log('[AUTH] state change:', event);
 
       // INITIAL_SESSION은 init()에서 이미 처리하므로 무시.
-      // (자동 로그인 시 init + 이 콜백이 중복으로 load를 호출해
-      //  무거운 쿼리가 2번 도는 것을 막아 자동 로그인 속도를 개선)
       if (event === 'INITIAL_SESSION') {
         return;
       }
 
       setSession(newSession);
       if (newSession) {
-        try {
-          await loadIdentityAndAcademies(newSession.user.id);
-        } catch (err) {
-          console.error('[AUTH] state change error:', err);
-        }
+        // 로그인 직후에도 화면은 즉시 진입 (데이터는 백그라운드).
+        // ⚠️ supabase-js 데드락 방지: onAuthStateChange 콜백 안에서 직접 await하지 않고
+        // setTimeout(0)으로 디퍼 — auth lock 해제 후 실행.
+        setIsLoading(false);
+        const userId = newSession.user.id;
+        setTimeout(() => {
+          loadIdentityAndAcademies(userId).catch(err =>
+            console.error('[AUTH] state change load error:', err)
+          );
+        }, 0);
       } else {
         setParent(null);
         setIsOwnerAccount(false);
         setMyAcademies([]);
         setSelectedKey(null);
+        setIdentityLoaded(false);
       }
     });
 
@@ -104,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadIdentityAndAcademies = async (authUserId: string) => {
     console.log('[LOAD] identity query start');
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('identity query timeout 10s')), 10000)
+      setTimeout(() => reject(new Error('identity query timeout 6s')), 6000)
     );
 
     try {
@@ -233,6 +254,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setParent(null);
       setIsOwnerAccount(false);
       setMyAcademies([]);
+    } finally {
+      // 정체성 로딩 완료 (성공/실패 무관). 이후 isAuthenticated가 실제 값으로 판정됨.
+      setIdentityLoaded(true);
     }
   };
 
@@ -368,7 +392,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const currentAcademy = myAcademies.find(a => a.parentStudentId === selectedKey) || null;
   const isOwnerPreview = currentAcademy?.source === 'owner_preview';
 
-  const isAuthenticated = !!session && (!!parent || isOwnerAccount);
+  // 인증 판정:
+  //  - 정체성 로딩 전(identityLoaded=false): session만 있으면 인증 인정 → 깜빡임 방지,
+  //    즉시 홈 진입. 데이터는 백그라운드로 채워짐.
+  //  - 정체성 로딩 후(identityLoaded=true): 실제 parent/owner 여부로 최종 판정.
+  //    (둘 다 아니면 로그인 화면으로)
+  const isAuthenticated = !!session && (!identityLoaded || !!parent || isOwnerAccount);
 
   return (
     <AuthContext.Provider
@@ -382,6 +411,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         selectAcademy,
         currentAcademy,
         isOwnerPreview,
+        identityLoaded,
         signUpFromInvite,
         acceptInviteForExistingParent,
         signIn,
