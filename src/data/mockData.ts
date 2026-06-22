@@ -92,53 +92,55 @@ export const weeklyReports: WeeklyReport[] = [
   },
 ];
 
+// ID는 Edge Function의 parent_actions와 호환 유지 (praise/trust/snack/rest/encourage/play/listen/hug)
+// 라벨·아이콘·설명은 학원 학부모(초중고) 톤에 맞게 어른스럽게 재구성
 export const parentActions: ParentAction[] = [
   {
     id: 'praise',
-    label: '칭찬하기',
-    icon: 'star',
-    description: '잘한 점을 구체적으로 짚어 칭찬해주세요. "열심히 했네"보다 "그 부분을 스스로 해냈구나"가 더 힘이 됩니다.',
+    label: '강점 알아주기',
+    icon: 'sparkles',
+    description: '잘한 점을 구체적으로 짚어 인정해주세요. "열심히 했네"보다 "그 부분을 스스로 해냈구나"가 더 힘이 됩니다.',
   },
   {
     id: 'trust',
-    label: '믿어주기',
+    label: '믿고 기다리기',
     icon: 'heart',
-    description: '아이가 스스로 방법을 찾을 수 있도록 기다려주세요. 먼저 답을 주기보다 믿고 지켜보는 것이 사고력을 키웁니다.',
+    description: '스스로 방법을 찾을 시간을 주세요. 답을 먼저 주기보다 믿고 지켜보는 것이 사고력을 키웁니다.',
   },
   {
     id: 'snack',
-    label: '간식주기',
-    icon: 'cookie',
-    description: '집중이 끝난 뒤 가벼운 간식 타임을 만들어주세요. 작은 보상이 다음 도전의 동기가 됩니다.',
+    label: '기분 전환',
+    icon: 'coffee',
+    description: '좋아하는 것 한 가지로 잠시 마음의 결을 바꿔주세요. 작은 환기가 다음 흐름을 만듭니다.',
   },
   {
     id: 'rest',
-    label: '쉬게하기',
+    label: '충분한 쉼',
     icon: 'moon',
-    description: '충분한 수면과 멍때리는 시간을 확보해주세요. 뇌는 쉴 때 정보를 정리하고 아이디어를 만들어냅니다.',
+    description: '충분한 수면과 멍때리는 시간을 확보해주세요. 뇌는 쉴 때 정보를 정리하고 아이디어를 만듭니다.',
   },
   {
     id: 'encourage',
-    label: '격려하기',
-    icon: 'thumbs-up',
-    description: '잘 안 풀리는 날에도 "시도한 것 자체가 의미 있어"라고 말해주세요. 포기하지 않는 힘이 길러집니다.',
+    label: '과정 응원',
+    icon: 'footprints',
+    description: '결과보다 과정을 알아봐 주세요. "시도한 것 자체가 의미 있어"라는 한 마디가 회복력을 키웁니다.',
   },
   {
     id: 'play',
-    label: '놀아주기',
-    icon: 'gamepad-2',
-    description: '목적 없는 자유로운 놀이를 충분히 허용해주세요. 놀이는 아이의 사고 유연성과 집중력을 회복시킵니다.',
+    label: '함께 시간',
+    icon: 'users',
+    description: '학습 이야기 말고 일상을 나누는 시간을 만들어주세요. 부모와의 편안한 시간이 정서의 토대가 됩니다.',
   },
   {
     id: 'listen',
-    label: '들어주기',
+    label: '끝까지 듣기',
     icon: 'ear',
-    description: '오늘 어땠는지 먼저 물어봐주세요. 평가 없이 끝까지 들어주는 것만으로도 아이는 생각을 정리하게 됩니다.',
+    description: '오늘 어땠는지 먼저 물어봐주세요. 평가 없이 끝까지 듣는 것만으로 아이는 생각을 정리하게 됩니다.',
   },
   {
     id: 'hug',
-    label: '안아주기',
+    label: '정서 공감',
     icon: 'hand-heart',
-    description: '말보다 먼저 안아주세요. 신체적 안정감이 채워져야 사고와 집중도 제대로 작동합니다.',
+    description: '말보다 먼저 마음을 알아주세요. "많이 속상했겠다" 한 마디가 어떤 조언보다 큰 위로가 됩니다.',
   },
 ];
