@@ -23,58 +23,15 @@ const AXIS_LABELS: Record<keyof WeeklyStats, string> = {
   energy: '에너지',
 };
 
+type Delta = { text: string; dir: 'up' | 'down' | 'flat' };
+
 // 변동 정보 계산: 화살표+숫자 또는 변동없음(-)
-function buildDelta(current: number, prev: number | undefined | null): { text: string; dir: 'up' | 'down' | 'flat' } {
+function buildDelta(current: number, prev: number | undefined | null): Delta {
   if (prev === undefined || prev === null) return { text: '', dir: 'flat' };
   const diff = current - prev;
   if (Math.abs(diff) < 2) return { text: '-', dir: 'flat' };
   if (diff > 0) return { text: `↑${diff}`, dir: 'up' };
   return { text: `↓${Math.abs(diff)}`, dir: 'down' };
-}
-
-// 커스텀 축 라벨: 이름(1줄) + 변동(2줄). 줄바꿈으로 가로폭 절약 → 안 잘림.
-function renderAxisTick(props: any) {
-  const { x, y, cx, cy, payload } = props;
-  const { label, delta } = payload.value as { label: string; delta: { text: string; dir: string } };
-
-  // 라벨이 중심 기준 어느 쪽인지로 정렬 결정
-  const dx = x - cx;
-  const dy = y - cy;
-  let anchor: 'start' | 'middle' | 'end' = 'middle';
-  if (dx > 20) anchor = 'start';
-  else if (dx < -20) anchor = 'end';
-
-  // 위/아래 위치에 따라 살짝 오프셋
-  const yOffset = dy < -10 ? -4 : dy > 10 ? 14 : 4;
-
-  const deltaColor = delta.dir === 'up' ? '#16a34a' : delta.dir === 'down' ? '#dc2626' : '#9ca3af';
-
-  return (
-    <g>
-      <text
-        x={x}
-        y={y + yOffset}
-        textAnchor={anchor}
-        fill="#6b7280"
-        fontSize={12}
-        fontWeight={600}
-      >
-        {label}
-      </text>
-      {delta.text && (
-        <text
-          x={x}
-          y={y + yOffset + 15}
-          textAnchor={anchor}
-          fill={deltaColor}
-          fontSize={11}
-          fontWeight={600}
-        >
-          {delta.text}
-        </text>
-      )}
-    </g>
-  );
 }
 
 export default function PentagonChart({ stats, prevStats }: PentagonChartProps) {
@@ -93,15 +50,48 @@ export default function PentagonChart({ stats, prevStats }: PentagonChartProps) 
     return () => clearTimeout(t);
   }, [stats]);
 
+  // 축 이름(문자열) → 변동 정보 맵. tick 렌더러가 이름으로 조회.
+  const deltaMap: Record<string, Delta> = {};
+  AXIS_KEYS.forEach(key => {
+    deltaMap[AXIS_LABELS[key]] = buildDelta(stats[key], prevStats?.[key]);
+  });
+
+  // subject는 반드시 문자열(축 이름)이어야 recharts가 각도 배치 가능
   const data = AXIS_KEYS.map(key => ({
-    subject: {
-      label: AXIS_LABELS[key],
-      delta: buildDelta(stats[key], prevStats?.[key]),
-    },
+    subject: AXIS_LABELS[key],
     current: animatedStats[key],
     previous: prevStats?.[key] ?? null,
     fullMark: 100,
   }));
+
+  // 커스텀 tick: 이름(1줄) + 변동(2줄)
+  const renderAxisTick = (props: any) => {
+    const { x, y, cx, cy, payload } = props;
+    const name: string = payload.value;
+    const delta = deltaMap[name] || { text: '', dir: 'flat' };
+
+    const dx = x - cx;
+    const dy = y - cy;
+    let anchor: 'start' | 'middle' | 'end' = 'middle';
+    if (dx > 20) anchor = 'start';
+    else if (dx < -20) anchor = 'end';
+
+    const yOffset = dy < -10 ? -2 : dy > 10 ? 12 : 4;
+    const deltaColor = delta.dir === 'up' ? '#16a34a' : delta.dir === 'down' ? '#dc2626' : '#9ca3af';
+
+    return (
+      <g>
+        <text x={x} y={y + yOffset} textAnchor={anchor} fill="#6b7280" fontSize={12} fontWeight={600}>
+          {name}
+        </text>
+        {delta.text && (
+          <text x={x} y={y + yOffset + 15} textAnchor={anchor} fill={deltaColor} fontSize={11} fontWeight={600}>
+            {delta.text}
+          </text>
+        )}
+      </g>
+    );
+  };
 
   return (
     <div className="w-full flex flex-col items-center">
@@ -161,21 +151,12 @@ export default function PentagonChart({ stats, prevStats }: PentagonChartProps) 
               isAnimationActive={true}
               animationDuration={1200}
               animationEasing="ease-out"
-              dot={{
-                r: 4,
-                fill: '#7c3aed',
-                strokeWidth: 0,
-              }}
-              activeDot={{
-                r: 6,
-                fill: '#7c3aed',
-                strokeWidth: 2,
-                stroke: '#fff',
-              }}
+              dot={{ r: 4, fill: '#7c3aed', strokeWidth: 0 }}
+              activeDot={{ r: 6, fill: '#7c3aed', strokeWidth: 2, stroke: '#fff' }}
             />
           </RadarChart>
         </ResponsiveContainer>
       </div>
     </div>
   );
-} 
+}
