@@ -53,13 +53,19 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // 새 Service Worker 즉시 활성화 (옛 코드 붙잡지 않게)
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // Supabase 인증·실시간·DB API는 항상 네트워크
         navigateFallbackDenylist: [/^\/api/, /supabase\.co/],
         runtimeCaching: [
           {
-            // JS/CSS/이미지/폰트 등 정적 자산 캐시
+            // 이미지·폰트만 캐시. JS/CSS(script/style)는 캐시하지 않음 —
+            // 옛날 코드가 캐시돼서 무한로딩 등 깨지는 것을 방지.
+            // (앱 셸은 precache + autoUpdate가 처리)
             urlPattern: ({ request }) =>
-              ['image', 'font', 'style', 'script'].includes(request.destination),
+              ['image', 'font'].includes(request.destination),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'static-assets',
