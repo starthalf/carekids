@@ -19,27 +19,16 @@ export default function HomePage() {
     previousStats,
     currentWeekIndex,
     isLoadingReport,
-    isNewStudent,
     goToPreviousWeek,
     goToNextWeek,
     canGoNext,
     canGoPrevious,
     academyName,
   } = useChildData();
-  const { myAcademies, selectedKey, selectAcademy, currentAcademy, identityLoaded } = useAuth();
+  const { myAcademies, selectedKey, selectAcademy, currentAcademy } = useAuth();
 
   const [showSelector, setShowSelector] = useState(false);
   const hasMultiple = myAcademies.length > 1;
-
-  // 백그라운드 정체성 로딩 중 — 빈 학원 메시지 대신 스피너
-  if (!identityLoaded && myAcademies.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
-        <div className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-        <p className="text-sm text-gray-400">불러오는 중...</p>
-      </div>
-    );
-  }
 
   if (myAcademies.length === 0) {
     return (
@@ -138,30 +127,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 신규 학생 안내 — weekly_insights row 0개 */}
-      {!isLoadingReport && isNewStudent && (
-        <div className="bg-gradient-to-br from-primary-50 to-white rounded-2xl shadow-sm border border-primary-100 p-6 animate-scaleIn">
-          <div className="text-4xl mb-3">🌱</div>
-          <h2 className="text-base font-bold text-gray-900 mb-2">
-            {currentChild.name}은(는) 키즈위크에 새로 오셨네요!
-          </h2>
-          <p className="text-sm text-gray-600 leading-relaxed mb-4">
-            학원에서 한 주~두 주 정도 데이터가 쌓이면<br/>
-            {currentChild.name}만의 학습 리듬을 분석해 드릴게요.
-          </p>
-          <div className="bg-white/70 rounded-xl p-4 border border-primary-100/50">
-            <p className="text-xs text-gray-500 leading-relaxed">
-              💡 매주 월요일 아침, 한 주치 학원 일상을 분석한<br/>
-              따뜻한 리포트가 도착합니다.
-            </p>
-          </div>
-          <p className="text-xs text-gray-400 mt-4 text-center">
-            그동안 "기록" 탭에서 학원 일상을 확인하실 수 있어요
-          </p>
-        </div>
-      )}
-
-      {!isLoadingReport && !isNewStudent && currentReport && (
+      {!isLoadingReport && currentReport && (
         <>
           {/* 1. 5축 차트 + 해시태그 */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-6 animate-scaleIn">

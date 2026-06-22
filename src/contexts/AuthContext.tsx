@@ -27,7 +27,6 @@ interface AuthContextType {
   selectAcademy: (parentStudentId: string) => void;
   currentAcademy: ParentAcademy | null;
   isOwnerPreview: boolean;
-  identityLoaded: boolean;   // 백그라운드 정체성 로딩 완료 여부
 
   signUpFromInvite: (params: { token: string; name: string; email: string; password: string; phone?: string }) => Promise<{ error?: string }>;
   acceptInviteForExistingParent: (token: string) => Promise<{ error?: string }>;
@@ -52,9 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [myAcademies, setMyAcademies] = useState<ParentAcademy[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // 백그라운드 정체성 로딩이 끝났는지. 끝나기 전엔 session만으로 인증 인정(깜빡임 방지),
-  // 끝난 후엔 실제 parent/owner 여부로 최종 판정.
-  const [identityLoaded, setIdentityLoaded] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -63,21 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data } = await supabase.auth.getSession();
         console.log('[AUTH] getSession done, user:', data.session?.user?.id);
         setSession(data.session);
-
-        // ⚡ 세션 확인 즉시 화면 진입 (데이터 로딩을 기다리지 않음).
-        // 학원/학생 데이터(myAcademies)는 백그라운드로 로드되고,
-        // 그 동안 HomePage는 자체 "분석 중" 상태를 표시한다.
-        setIsLoading(false);
-        console.log('[AUTH] init - session resolved, entering app');
-
         if (data.session) {
-          // await 하지 않음 — 백그라운드 로딩
-          loadIdentityAndAcademies(data.session.user.id).catch(err =>
-            console.error('[AUTH] background load error:', err)
-          );
+          await loadIdentityAndAcademies(data.session.user.id);
         }
       } catch (err) {
         console.error('[AUTH] init error:', err);
+      } finally {
+        console.log('[AUTH] init finally');
         setIsLoading(false);
       }
     };
@@ -105,7 +93,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsOwnerAccount(false);
         setMyAcademies([]);
         setSelectedKey(null);
-        setIdentityLoaded(false);
       }
     });
 
@@ -246,9 +233,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setParent(null);
       setIsOwnerAccount(false);
       setMyAcademies([]);
-    } finally {
-      // 정체성 로딩 완료 (성공/실패 무관). 이후 isAuthenticated가 실제 값으로 판정됨.
-      setIdentityLoaded(true);
     }
   };
 
@@ -384,12 +368,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const currentAcademy = myAcademies.find(a => a.parentStudentId === selectedKey) || null;
   const isOwnerPreview = currentAcademy?.source === 'owner_preview';
 
-  // 인증 판정:
-  //  - 정체성 로딩 전(identityLoaded=false): session만 있으면 인증 인정 → 깜빡임 방지,
-  //    즉시 홈 진입. 데이터는 백그라운드로 채워짐.
-  //  - 정체성 로딩 후(identityLoaded=true): 실제 parent/owner 여부로 최종 판정.
-  //    (둘 다 아니면 로그인 화면으로)
-  const isAuthenticated = !!session && (!identityLoaded || !!parent || isOwnerAccount);
+  const isAuthenticated = !!session && (!!parent || isOwnerAccount);
 
   return (
     <AuthContext.Provider
@@ -403,7 +382,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         selectAcademy,
         currentAcademy,
         isOwnerPreview,
-        identityLoaded,
         signUpFromInvite,
         acceptInviteForExistingParent,
         signIn,
