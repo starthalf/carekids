@@ -75,13 +75,19 @@ export default function PentagonChart({ stats, prevStats }: PentagonChartProps) 
           </div>
         )}
       </div>
-      <div className="w-full h-[320px] px-6">
+      <div className="w-full h-[380px]">
         <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={data} cx="50%" cy="50%" outerRadius="62%">
+          <RadarChart
+            data={data}
+            cx="50%"
+            cy="50%"
+            outerRadius="72%"
+            margin={{ top: 30, right: 60, bottom: 30, left: 60 }}
+          >
             <PolarGrid stroke="#e5e7eb" strokeWidth={1} />
             <PolarAngleAxis
               dataKey="subject"
-              tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 500 }}
+              tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 500 }}
               tickLine={false}
             />
             {prevStats && (
